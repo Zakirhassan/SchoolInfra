@@ -1,0 +1,256 @@
+import express from 'express';
+import pool from '../config/database.js';
+import { authenticateToken } from '../config/auth.js';
+
+const router = express.Router();
+
+// ===== SUBJECTS =====
+
+// Get all subjects (optionally filter by class)
+router.get('/', authenticateToken, async (req, res) => {
+    try {
+        const { classId } = req.query;
+
+        let query = `
+      SELECT s.*, c.class_name, c.section 
+      FROM subjects s
+      LEFT JOIN classes c ON s.class_id = c.id
+    `;
+        const params = [];
+
+        if (classId) {
+            query += ' WHERE s.class_id = $1';
+            params.push(classId);
+        }
+
+        query += ' ORDER BY c.class_name, c.section, s.subject_name';
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Get subjects error:', error);
+        res.status(500).json({ error: 'Failed to fetch subjects' });
+    }
+});
+
+// Create subject
+router.post('/', authenticateToken, async (req, res) => {
+    try {
+        const { subjectName, classId, maxMarks } = req.body;
+
+        if (!subjectName || !classId) {
+            return res.status(400).json({ error: 'Subject name and class ID are required' });
+        }
+
+        const result = await pool.query(
+            'INSERT INTO subjects (subject_name, class_id, max_marks) VALUES ($1, $2, $3) RETURNING *',
+            [subjectName, classId, maxMarks || 100]
+        );
+
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        if (error.code === '23505') {
+            return res.status(409).json({ error: 'Subject already exists for this class' });
+        }
+        console.error('Create subject error:', error);
+        res.status(500).json({ error: 'Failed to create subject' });
+    }
+});
+
+// Update subject
+router.put('/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { subjectName, maxMarks } = req.body;
+
+        const result = await pool.query(
+            'UPDATE subjects SET subject_name = $1, max_marks = $2 WHERE id = $3 RETURNING *',
+            [subjectName, maxMarks, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Subject not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Update subject error:', error);
+        res.status(500).json({ error: 'Failed to update subject' });
+    }
+});
+
+// Delete subject
+router.delete('/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query('DELETE FROM subjects WHERE id = $1', [id]);
+        res.json({ message: 'Subject deleted successfully' });
+    } catch (error) {
+        console.error('Delete subject error:', error);
+        res.status(500).json({ error: 'Failed to delete subject' });
+    }
+});
+
+// ===== EXAMS =====
+
+// Get all exams (optionally filter by class)
+router.get('/exams', authenticateToken, async (req, res) => {
+    try {
+        const { classId } = req.query;
+
+        let query = `
+      SELECT e.*, c.class_name, c.section 
+      FROM exams e
+      LEFT JOIN classes c ON e.class_id = c.id
+    `;
+        const params = [];
+
+        if (classId) {
+            query += ' WHERE e.class_id = $1';
+            params.push(classId);
+        }
+
+        query += ' ORDER BY e.exam_date DESC';
+
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Get exams error:', error);
+        res.status(500).json({ error: 'Failed to fetch exams' });
+    }
+});
+
+// Create exam
+router.post('/exams', authenticateToken, async (req, res) => {
+    try {
+        const { examName, classId, examDate, academicYear } = req.body;
+
+        if (!examName || !classId || !academicYear) {
+            return res.status(400).json({ error: 'Exam name, class ID, and academic year are required' });
+        }
+
+        const result = await pool.query(
+            'INSERT INTO exams (exam_name, class_id, exam_date, academic_year) VALUES ($1, $2, $3, $4) RETURNING *',
+            [examName, classId, examDate, academicYear]
+        );
+
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Create exam error:', error);
+        res.status(500).json({ error: 'Failed to create exam' });
+    }
+});
+
+// Update exam
+router.put('/exams/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { examName, examDate, academicYear } = req.body;
+
+        const result = await pool.query(
+            'UPDATE exams SET exam_name = $1, exam_date = $2, academic_year = $3 WHERE id = $4 RETURNING *',
+            [examName, examDate, academicYear, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Exam not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Update exam error:', error);
+        res.status(500).json({ error: 'Failed to update exam' });
+    }
+});
+
+// Delete exam
+router.delete('/exams/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query('DELETE FROM exams WHERE id = $1', [id]);
+        res.json({ message: 'Exam deleted successfully' });
+    } catch (error) {
+        console.error('Delete exam error:', error);
+        res.status(500).json({ error: 'Failed to delete exam' });
+    }
+});
+
+// ===== MARKS =====
+
+// Get marks for a student in an exam
+router.get('/marks/student/:studentId/exam/:examId', authenticateToken, async (req, res) => {
+    try {
+        const { studentId, examId } = req.params;
+
+        const result = await pool.query(
+            `SELECT m.*, s.subject_name, s.max_marks
+       FROM marks m
+       JOIN subjects s ON m.subject_id = s.id
+       WHERE m.student_id = $1 AND m.exam_id = $2
+       ORDER BY s.subject_name`,
+            [studentId, examId]
+        );
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Get marks error:', error);
+        res.status(500).json({ error: 'Failed to fetch marks' });
+    }
+});
+
+// Enter/update marks (bulk)
+router.post('/marks', authenticateToken, async (req, res) => {
+    try {
+        const { marks } = req.body; // Array of { studentId, subjectId, examId, marksObtained }
+
+        if (!marks || !Array.isArray(marks)) {
+            return res.status(400).json({ error: 'Marks array is required' });
+        }
+
+        const insertedMarks = [];
+
+        for (const mark of marks) {
+            const { studentId, subjectId, examId, marksObtained } = mark;
+
+            // Validate marks against max marks
+            const subjectResult = await pool.query(
+                'SELECT max_marks FROM subjects WHERE id = $1',
+                [subjectId]
+            );
+
+            if (subjectResult.rows.length === 0) {
+                continue; // Skip if subject not found
+            }
+
+            const maxMarks = subjectResult.rows[0].max_marks;
+            if (marksObtained > maxMarks) {
+                return res.status(400).json({
+                    error: `Marks obtained (${marksObtained}) cannot exceed max marks (${maxMarks})`
+                });
+            }
+
+            // Upsert marks
+            const result = await pool.query(
+                `INSERT INTO marks (student_id, subject_id, exam_id, marks_obtained)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (student_id, subject_id, exam_id)
+         DO UPDATE SET marks_obtained = $4
+         RETURNING *`,
+                [studentId, subjectId, examId, marksObtained]
+            );
+
+            insertedMarks.push(result.rows[0]);
+        }
+
+        res.status(201).json({
+            message: 'Marks saved successfully',
+            count: insertedMarks.length,
+            marks: insertedMarks
+        });
+    } catch (error) {
+        console.error('Save marks error:', error);
+        res.status(500).json({ error: 'Failed to save marks' });
+    }
+});
+
+export default router;
