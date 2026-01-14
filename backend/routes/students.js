@@ -251,7 +251,10 @@ router.get('/update-template/:classId', authenticateToken, async (req, res) => {
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'No students found for this class' });
+            return res.status(404).json({
+                error: 'No students found for this class',
+                message: 'Please add students to this class first before downloading the update template.'
+            });
         }
 
         const { generateUpdateTemplate } = await import('../services/bulkUpdateValidator.js');

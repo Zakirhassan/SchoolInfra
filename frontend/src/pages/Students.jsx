@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MdAdd, MdFileDownload, MdUpload } from 'react-icons/md';
+import { MdAdd, MdFileDownload, MdUpload, MdEdit, MdDelete } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import Breadcrumb from '../components/Breadcrumb';
@@ -13,7 +13,8 @@ export default function Students() {
     const [filterClass, setFilterClass] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [showUploadModal, setShowUploadModal] = useState(false);
-    const [uploadMode, setUploadMode] = useState('create'); // 'create' or 'update'
+    const [editingId, setEditingId] = useState(null); // Track which student is being edited
+    const [uploadMode, setUploadMode] = useState('create'); // default to create
     const [formData, setFormData] = useState({
         admissionNumber: '',
         rollNumber: '',
@@ -56,13 +57,19 @@ export default function Students() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            await api.post('/students', formData);
+            if (editingId) {
+                await api.put(`/students/${editingId}`, formData);
+                toast.success('Student updated successfully!');
+            } else {
+                await api.post('/students', formData);
+                toast.success('Student added successfully!');
+            }
             fetchStudents();
             setShowAddModal(false);
             resetForm();
-            alert('Student added successfully!');
+            setEditingId(null);
         } catch (error) {
-            alert(error.response?.data?.error || 'Failed to add student');
+            toast.error(error.response?.data?.error || 'Operation failed');
         }
     };
 
@@ -71,11 +78,29 @@ export default function Students() {
             try {
                 await api.delete(`/students/${id}`);
                 fetchStudents();
-                alert('Student deleted successfully!');
+                toast.success('Student deleted successfully!');
             } catch (error) {
-                alert('Failed to delete student');
+                toast.error('Failed to delete student');
             }
         }
+    };
+
+    const handleEdit = (student) => {
+        setEditingId(student.id);
+        setFormData({
+            admissionNumber: student.admission_number,
+            rollNumber: student.roll_number,
+            fullName: student.full_name,
+            fatherName: student.father_name,
+            motherName: student.mother_name,
+            dateOfBirth: student.date_of_birth ? new Date(student.date_of_birth).toISOString().split('T')[0] : '',
+            gender: student.gender,
+            classId: student.class_id,
+            address: student.address,
+            phoneNumber: student.phone_number,
+            feeStatus: student.fee_status
+        });
+        setShowAddModal(true);
     };
 
     const resetForm = () => {
@@ -112,26 +137,22 @@ export default function Students() {
         }
     };
 
-    const downloadUpdateTemplate = async () => {
-        if (!filterClass) {
-            toast.error('Please select a class first');
-            return;
-        }
-
+    // Simplified: Just one download function for blank template
+    const downloadBlankTemplate = async () => {
         try {
-            const response = await api.get(`/students/update-template/${filterClass}`, {
+            const response = await api.get('/students/template/download', {
                 responseType: 'blob'
             });
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', 'student_update_template.xlsx');
+            link.setAttribute('download', 'student_upload_template.xlsx');
             document.body.appendChild(link);
             link.click();
             link.remove();
-            toast.success('Update template downloaded successfully!');
+            toast.success('Template downloaded successfully!');
         } catch (error) {
-            toast.error(error.response?.data?.error || 'Failed to download update template');
+            toast.error('Failed to download template');
         }
     };
 
@@ -140,12 +161,8 @@ export default function Students() {
         setShowUploadModal(false);
     };
 
-    const openUploadModal = (mode) => {
-        if (mode === 'update' && !filterClass) {
-            toast.error('Please select a class first');
-            return;
-        }
-        setUploadMode(mode);
+    const openUploadModal = () => {
+        setUploadMode('create');
         setShowUploadModal(true);
     };
 
@@ -167,34 +184,31 @@ export default function Students() {
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-800 mb-2">Students Management</h1>
-                    <p className="text-gray-600">Manage student records, upload data, and generate ID cards</p>
+                    <p className="text-gray-600">Manage students, download template, and bulk upload</p>
                 </div>
                 <div className="flex gap-3">
-                    <button onClick={downloadTemplate} className="btn btn-secondary">
-                        <MdFileDownload size={20} />
-                        New Template
-                    </button>
                     <button
-                        onClick={downloadUpdateTemplate}
-                        className="btn btn-secondary"
-                        disabled={!filterClass}
+                        onClick={downloadBlankTemplate}
+                        className="btn btn-primary"
                     >
                         <MdFileDownload size={20} />
-                        Update Template
-                    </button>
-                    <button onClick={() => openUploadModal('create')} className="btn btn-primary">
-                        <MdUpload size={20} />
-                        Upload New
+                        Download Template
                     </button>
                     <button
-                        onClick={() => openUploadModal('update')}
+                        onClick={openUploadModal}
                         className="btn btn-success"
-                        disabled={!filterClass}
                     >
                         <MdUpload size={20} />
-                        Upload Updates
+                        Upload Template
                     </button>
-                    <button onClick={() => setShowAddModal(true)} className="btn btn-primary">
+                    <button
+                        onClick={() => {
+                            setEditingId(null);
+                            resetForm();
+                            setShowAddModal(true);
+                        }}
+                        className="btn btn-secondary"
+                    >
                         <MdAdd size={20} />
                         Add Student
                     </button>
@@ -257,9 +271,12 @@ export default function Students() {
                                             {student.fee_status}
                                         </span>
                                     </td>
-                                    <td className="px-4 py-3">
-                                        <button onClick={() => handleDelete(student.id)} className="text-red-600 hover:text-red-800">
-                                            🗑️
+                                    <td className="px-4 py-3 flex gap-2">
+                                        <button onClick={() => handleEdit(student)} className="text-blue-600 hover:text-blue-800" title="Edit">
+                                            <MdEdit size={20} />
+                                        </button>
+                                        <button onClick={() => handleDelete(student.id)} className="text-red-600 hover:text-red-800" title="Delete">
+                                            <MdDelete size={20} />
                                         </button>
                                     </td>
                                 </tr>
@@ -305,7 +322,7 @@ export default function Students() {
             {showAddModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                        <h2 className="text-2xl font-bold mb-4">Add New Student</h2>
+                        <h2 className="text-2xl font-bold mb-4">{editingId ? 'Edit Student' : 'Add New Student'}</h2>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <input
