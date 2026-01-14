@@ -239,4 +239,147 @@ router.get('/template/download', (req, res) => {
     }
 });
 
+// Download update template with existing student data
+router.get('/update-template/:classId', authenticateToken, async (req, res) => {
+    try {
+        const { classId } = req.params;
+
+        // Fetch all students for the class
+        const result = await pool.query(
+            `SELECT * FROM students WHERE class_id = $1 ORDER BY roll_number`,
+            [classId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'No students found for this class' });
+        }
+
+        const { generateUpdateTemplate } = await import('../services/bulkUpdateValidator.js');
+        const buffer = generateUpdateTemplate(result.rows);
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=student_update_template.xlsx');
+        res.send(buffer);
+    } catch (error) {
+        console.error('Update template download error:', error);
+        res.status(500).json({ error: 'Failed to generate update template' });
+    }
+});
+
+// Bulk update students from Excel
+router.post('/bulk-update', authenticateToken, uploadExcel.single('file'), async (req, res) => {
+    try {
+        const { classId } = req.body;
+
+        if (!classId) {
+            return res.status(400).json({ error: 'Class ID is required' });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ error: 'Excel file is required' });
+        }
+
+        // Parse Excel file
+        const XLSX = (await import('xlsx')).default;
+        const workbook = XLSX.readFile(req.file.path);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(worksheet);
+
+        if (data.length === 0) {
+            return res.status(400).json({ error: 'Excel file is empty' });
+        }
+
+        // Convert Excel column names to database field names
+        const students = data.map(row => ({
+            student_id: row['Student ID'],
+            admission_number: row['Admission Number'],
+            roll_number: row['Roll Number'],
+            full_name: row['Full Name'],
+            father_name: row['Father Name'],
+            mother_name: row['Mother Name'],
+            date_of_birth: row['Date of Birth'],
+            gender: row['Gender'],
+            contact_number: row['Contact Number'],
+            email: row['Email'] || null,
+            address: row['Address'],
+            blood_group: row['Blood Group'] || null,
+            previous_school: row['Previous School'] || null,
+            admission_date: row['Admission Date'] || null
+        }));
+
+        // Validate all students
+        const { validateBulkUpdate } = await import('../services/bulkUpdateValidator.js');
+        const validationResult = await validateBulkUpdate(students, classId);
+
+        if (!validationResult.success) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                details: validationResult.errors
+            });
+        }
+
+        // Update all students in a transaction
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            let updatedCount = 0;
+            for (const student of students) {
+                const result = await client.query(
+                    `UPDATE students SET 
+                        admission_number = $1,
+                        roll_number = $2,
+                        full_name = $3,
+                        father_name = $4,
+                        mother_name = $5,
+                        date_of_birth = $6,
+                        gender = $7,
+                        phone_number = $8,
+                        email = $9,
+                        address = $10,
+                        blood_group = $11,
+                        previous_school = $12,
+                        admission_date = $13,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $14`,
+                    [
+                        student.admission_number,
+                        student.roll_number,
+                        student.full_name,
+                        student.father_name,
+                        student.mother_name,
+                        student.date_of_birth,
+                        student.gender,
+                        student.contact_number,
+                        student.email,
+                        student.address,
+                        student.blood_group,
+                        student.previous_school,
+                        student.admission_date,
+                        student.student_id
+                    ]
+                );
+                updatedCount += result.rowCount;
+            }
+
+            await client.query('COMMIT');
+
+            res.json({
+                success: true,
+                message: `Successfully updated ${updatedCount} students`,
+                updated: updatedCount
+            });
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('Bulk update error:', error);
+        res.status(500).json({ error: 'Failed to update students' });
+    }
+});
+
 export default router;

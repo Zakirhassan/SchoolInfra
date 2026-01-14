@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
+import { MdAdd, MdFileDownload, MdUpload } from 'react-icons/md';
+import toast from 'react-hot-toast';
 import api from '../api/axios';
+import Breadcrumb from '../components/Breadcrumb';
+import ExcelUpload from '../components/ExcelUpload';
 
 export default function Students() {
     const [students, setStudents] = useState([]);
@@ -8,6 +12,8 @@ export default function Students() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterClass, setFilterClass] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showUploadModal, setShowUploadModal] = useState(false);
+    const [uploadMode, setUploadMode] = useState('create'); // 'create' or 'update'
     const [formData, setFormData] = useState({
         admissionNumber: '',
         rollNumber: '',
@@ -100,9 +106,47 @@ export default function Students() {
             document.body.appendChild(link);
             link.click();
             link.remove();
+            toast.success('Template downloaded successfully!');
         } catch (error) {
-            alert('Failed to download template');
+            toast.error('Failed to download template');
         }
+    };
+
+    const downloadUpdateTemplate = async () => {
+        if (!filterClass) {
+            toast.error('Please select a class first');
+            return;
+        }
+
+        try {
+            const response = await api.get(`/students/update-template/${filterClass}`, {
+                responseType: 'blob'
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'student_update_template.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            toast.success('Update template downloaded successfully!');
+        } catch (error) {
+            toast.error(error.response?.data?.error || 'Failed to download update template');
+        }
+    };
+
+    const handleUploadSuccess = () => {
+        fetchStudents();
+        setShowUploadModal(false);
+    };
+
+    const openUploadModal = (mode) => {
+        if (mode === 'update' && !filterClass) {
+            toast.error('Please select a class first');
+            return;
+        }
+        setUploadMode(mode);
+        setShowUploadModal(true);
     };
 
     const filteredStudents = students.filter(student => {
@@ -118,14 +162,41 @@ export default function Students() {
 
     return (
         <div className="fade-in">
+            <Breadcrumb items={[{ label: 'Students' }]} />
+
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-gray-800">Students Management</h1>
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-800 mb-2">Students Management</h1>
+                    <p className="text-gray-600">Manage student records, upload data, and generate ID cards</p>
+                </div>
                 <div className="flex gap-3">
-                    <button onClick={downloadTemplate} className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition btn">
-                        📥 Download Template
+                    <button onClick={downloadTemplate} className="btn btn-secondary">
+                        <MdFileDownload size={20} />
+                        New Template
                     </button>
-                    <button onClick={() => setShowAddModal(true)} className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition btn">
-                        ➕ Add Student
+                    <button
+                        onClick={downloadUpdateTemplate}
+                        className="btn btn-secondary"
+                        disabled={!filterClass}
+                    >
+                        <MdFileDownload size={20} />
+                        Update Template
+                    </button>
+                    <button onClick={() => openUploadModal('create')} className="btn btn-primary">
+                        <MdUpload size={20} />
+                        Upload New
+                    </button>
+                    <button
+                        onClick={() => openUploadModal('update')}
+                        className="btn btn-success"
+                        disabled={!filterClass}
+                    >
+                        <MdUpload size={20} />
+                        Upload Updates
+                    </button>
+                    <button onClick={() => setShowAddModal(true)} className="btn btn-primary">
+                        <MdAdd size={20} />
+                        Add Student
                     </button>
                 </div>
             </div>
@@ -180,8 +251,8 @@ export default function Students() {
                                     <td className="px-4 py-3">{student.phone_number}</td>
                                     <td className="px-4 py-3">
                                         <span className={`px-2 py-1 rounded text-sm ${student.fee_status === 'Paid' ? 'bg-green-100 text-green-800' :
-                                                student.fee_status === 'Partial' ? 'bg-yellow-100 text-yellow-800' :
-                                                    'bg-red-100 text-red-800'
+                                            student.fee_status === 'Partial' ? 'bg-yellow-100 text-yellow-800' :
+                                                'bg-red-100 text-red-800'
                                             }`}>
                                             {student.fee_status}
                                         </span>
@@ -197,6 +268,38 @@ export default function Students() {
                     </table>
                 </div>
             </div>
+
+            {/* Upload Modal */}
+            {showUploadModal && (
+                <div className="modal-overlay">
+                    <div className="modal-content max-w-2xl">
+                        <div className="p-6 border-b">
+                            <h2 className="text-2xl font-bold text-gray-800">
+                                {uploadMode === 'create' ? 'Upload New Students' : 'Upload Student Updates'}
+                            </h2>
+                            <p className="text-sm text-gray-600 mt-2">
+                                {uploadMode === 'create'
+                                    ? 'Upload Excel file with new student data'
+                                    : 'Upload Excel file with updated student data'}
+                            </p>
+                        </div>
+
+                        <div className="p-6">
+                            <ExcelUpload
+                                classId={filterClass}
+                                onSuccess={handleUploadSuccess}
+                                mode={uploadMode}
+                            />
+                        </div>
+
+                        <div className="p-6 border-t flex justify-end">
+                            <button onClick={() => setShowUploadModal(false)} className="btn btn-secondary">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Add Student Modal */}
             {showAddModal && (

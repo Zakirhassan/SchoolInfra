@@ -3,7 +3,7 @@ import { MdCloudUpload, MdCheckCircle, MdError } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 
-export default function ExcelUpload({ classId, onSuccess }) {
+export default function ExcelUpload({ classId, onSuccess, mode = 'create' }) {
     const [dragActive, setDragActive] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -62,7 +62,9 @@ export default function ExcelUpload({ classId, onSuccess }) {
                 setUploadProgress(prev => Math.min(prev + 10, 90));
             }, 200);
 
-            const response = await api.post('/students/bulk-upload', formData, {
+            // Use different endpoint based on mode
+            const endpoint = mode === 'update' ? '/students/bulk-update' : '/students/bulk-upload';
+            const response = await api.post(endpoint, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
@@ -71,7 +73,12 @@ export default function ExcelUpload({ classId, onSuccess }) {
             clearInterval(progressInterval);
             setUploadProgress(100);
 
-            toast.success(`Successfully uploaded ${response.data.count} students!`);
+            // Different success messages based on mode
+            const successMessage = mode === 'update'
+                ? `Successfully updated ${response.data.updated} students!`
+                : `Successfully uploaded ${response.data.count} students!`;
+
+            toast.success(successMessage);
 
             if (onSuccess) {
                 onSuccess();
