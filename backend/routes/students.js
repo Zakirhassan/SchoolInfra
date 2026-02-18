@@ -1,15 +1,16 @@
 import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken } from '../config/auth.js';
-import { uploadPhoto, uploadExcel } from '../middleware/upload.js';
+import { uploadPhoto, uploadExcel, uploadDocument } from '../middleware/upload.js';
 import { parseStudentExcel, generateSampleTemplate } from '../services/excelParser.js';
+import { logAction } from '../config/audit.js';
 
 const router = express.Router();
 
 // Get all students with filters
 router.get('/', authenticateToken, async (req, res) => {
     try {
-        const { classId, section, feeStatus, search } = req.query;
+        const { classId, section, feeStatus, search, enrollmentStatus } = req.query;
 
         let query = `
       SELECT s.*, c.class_name, c.section 
@@ -19,6 +20,12 @@ router.get('/', authenticateToken, async (req, res) => {
     `;
         const params = [];
         let paramCount = 1;
+
+        if (req.user.role === 'TEACHER') {
+            query += ` AND c.teacher_id = $${paramCount}`;
+            params.push(req.user.id);
+            paramCount++;
+        }
 
         if (classId) {
             query += ` AND s.class_id = $${paramCount}`;
@@ -35,6 +42,12 @@ router.get('/', authenticateToken, async (req, res) => {
         if (search) {
             query += ` AND (s.full_name ILIKE $${paramCount} OR s.admission_number ILIKE $${paramCount})`;
             params.push(`%${search}%`);
+            paramCount++;
+        }
+
+        if (enrollmentStatus) {
+            query += ` AND s.enrollment_status = $${paramCount}`;
+            params.push(enrollmentStatus);
             paramCount++;
         }
 
@@ -64,7 +77,17 @@ router.get('/:id', authenticateToken, async (req, res) => {
             return res.status(404).json({ error: 'Student not found' });
         }
 
-        res.json(result.rows[0]);
+        const student = result.rows[0];
+
+        // RBAC check for Teachers
+        if (req.user.role === 'TEACHER') {
+            const courseCheck = await pool.query('SELECT teacher_id FROM classes WHERE id = $1', [student.class_id]);
+            if (courseCheck.rows.length === 0 || courseCheck.rows[0].teacher_id !== req.user.id) {
+                return res.status(403).json({ error: 'Access denied. You can only view your own students.' });
+            }
+        }
+
+        res.json(student);
     } catch (error) {
         console.error('Get student error:', error);
         res.status(500).json({ error: 'Failed to fetch student' });
@@ -76,7 +99,8 @@ router.post('/', authenticateToken, uploadPhoto.single('photo'), async (req, res
     try {
         const {
             admissionNumber, rollNumber, fullName, fatherName, motherName,
-            dateOfBirth, gender, classId, address, phoneNumber, feeStatus
+            dateOfBirth, gender, classId, address, phoneNumber, feeStatus,
+            email, password, enrollmentStatus
         } = req.body;
 
         // Validate required fields
@@ -87,19 +111,30 @@ router.post('/', authenticateToken, uploadPhoto.single('photo'), async (req, res
 
         const photoUrl = req.file ? `/uploads/photos/${req.file.filename}` : null;
 
+        // Hash password if provided
+        let passwordHash = null;
+        if (password) {
+            const salt = await (await import('bcryptjs')).default.genSalt(10);
+            passwordHash = await (await import('bcryptjs')).default.hash(password, salt);
+        }
+
         const result = await pool.query(
             `INSERT INTO students (
-        admission_number, roll_number, full_name, father_name, mother_name,
-        date_of_birth, gender, class_id, address, phone_number, photo_url, fee_status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+                admission_number, roll_number, full_name, father_name, mother_name,
+                date_of_birth, gender, class_id, address, phone_number, photo_url, fee_status,
+                email, password_hash, enrollment_status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
             [admissionNumber, rollNumber, fullName, fatherName, motherName,
-                dateOfBirth, gender, classId, address, phoneNumber, photoUrl, feeStatus || 'Unpaid']
+                dateOfBirth, gender, classId, address, phoneNumber, photoUrl, feeStatus || 'Unpaid',
+                email, passwordHash, enrollmentStatus || 'ENTRANCE_EXAM']
         );
+
+        await logAction(req.user.id, req.user.role, 'CREATE_STUDENT', { id: result.rows[0].id, name: fullName, status: result.rows[0].enrollment_status });
 
         res.status(201).json(result.rows[0]);
     } catch (error) {
         if (error.code === '23505') { // Unique violation
-            return res.status(409).json({ error: 'Student with this admission number already exists' });
+            return res.status(409).json({ error: 'Student with this admission number or email already exists' });
         }
         console.error('Create student error:', error);
         res.status(500).json({ error: 'Failed to create student' });
@@ -112,7 +147,8 @@ router.put('/:id', authenticateToken, uploadPhoto.single('photo'), async (req, r
         const { id } = req.params;
         const {
             admissionNumber, rollNumber, fullName, fatherName, motherName,
-            dateOfBirth, gender, classId, address, phoneNumber, feeStatus
+            dateOfBirth, gender, classId, address, phoneNumber, feeStatus,
+            email, password, enrollmentStatus
         } = req.body;
 
         let photoUrl = req.body.photoUrl; // Keep existing photo if not uploading new one
@@ -120,20 +156,34 @@ router.put('/:id', authenticateToken, uploadPhoto.single('photo'), async (req, r
             photoUrl = `/uploads/photos/${req.file.filename}`;
         }
 
-        const result = await pool.query(
-            `UPDATE students SET 
-        admission_number = $1, roll_number = $2, full_name = $3, father_name = $4,
-        mother_name = $5, date_of_birth = $6, gender = $7, class_id = $8,
-        address = $9, phone_number = $10, photo_url = $11, fee_status = $12,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $13 RETURNING *`,
-            [admissionNumber, rollNumber, fullName, fatherName, motherName,
-                dateOfBirth, gender, classId, address, phoneNumber, photoUrl, feeStatus, id]
-        );
+        // Handle password update if provided
+        const queryParams = [
+            admissionNumber, rollNumber, fullName, fatherName, motherName,
+            dateOfBirth, gender, classId, address, phoneNumber, photoUrl, feeStatus, email, enrollmentStatus, id
+        ];
+
+        let query = `UPDATE students SET
+admission_number = $1, roll_number = $2, full_name = $3, father_name = $4,
+    mother_name = $5, date_of_birth = $6, gender = $7, class_id = $8,
+    address = $9, phone_number = $10, photo_url = $11, fee_status = $12,
+    email = $13, enrollment_status = $14, updated_at = CURRENT_TIMESTAMP`;
+
+        if (password) {
+            const salt = await (await import('bcryptjs')).default.genSalt(10);
+            const hashedPassword = await (await import('bcryptjs')).default.hash(password, salt);
+            query += `, password_hash = $${queryParams.length + 1} `;
+            queryParams.push(hashedPassword);
+        }
+
+        query += ` WHERE id = $15 RETURNING *`;
+
+        const result = await pool.query(query, queryParams);
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Student not found' });
         }
+
+        await logAction(req.user.id, req.user.role, 'UPDATE_STUDENT', { id, name: fullName });
 
         res.json(result.rows[0]);
     } catch (error) {
@@ -142,20 +192,55 @@ router.put('/:id', authenticateToken, uploadPhoto.single('photo'), async (req, r
     }
 });
 
-// Delete student
-router.delete('/:id', authenticateToken, async (req, res) => {
+// Update student enrollment status
+router.patch('/:id/status', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await pool.query('DELETE FROM students WHERE id = $1 RETURNING *', [id]);
+        const { status } = req.body;
+
+        if (!['ENTRANCE_EXAM', 'ACTIVE', 'ALUMNI'].includes(status)) {
+            return res.status(400).json({ error: 'Invalid status' });
+        }
+
+        const result = await pool.query(
+            'UPDATE students SET enrollment_status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+            [status, id]
+        );
 
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Student not found' });
         }
 
-        res.json({ message: 'Student deleted successfully' });
+        await logAction(req.user.id, req.user.role, 'UPDATE_STUDENT_STATUS', { id, status });
+
+        res.json(result.rows[0]);
     } catch (error) {
-        console.error('Delete student error:', error);
-        res.status(500).json({ error: 'Failed to delete student' });
+        console.error('Update status error:', error);
+        res.status(500).json({ error: 'Failed to update status' });
+    }
+});
+
+// Bulk update status to ALUMNI for a course
+router.patch('/bulk-status/course/:classId', authenticateToken, async (req, res) => {
+    try {
+        const { classId } = req.params;
+        const { status } = req.body;
+
+        if (status !== 'ALUMNI') {
+            return res.status(400).json({ error: 'Only bulk ALUMNI update is supported via this route' });
+        }
+
+        const result = await pool.query(
+            'UPDATE students SET enrollment_status = $1, updated_at = CURRENT_TIMESTAMP WHERE class_id = $2 RETURNING id',
+            [status, classId]
+        );
+
+        await logAction(req.user.id, req.user.role, 'BULK_ALUMNI_UPDATE', { classId, count: result.rowCount });
+
+        res.json({ message: `Successfully marked ${result.rowCount} students as alumni`, count: result.rowCount });
+    } catch (error) {
+        console.error('Bulk status update error:', error);
+        res.status(500).json({ error: 'Failed to update course status' });
     }
 });
 
@@ -201,10 +286,10 @@ router.post('/bulk-upload', authenticateToken, uploadExcel.single('file'), async
         const insertedStudents = [];
         for (const student of parseResult.data) {
             const result = await pool.query(
-                `INSERT INTO students (
-          admission_number, roll_number, full_name, father_name, mother_name,
-          date_of_birth, gender, class_id, address, phone_number, fee_status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+                `INSERT INTO students(
+        admission_number, roll_number, full_name, father_name, mother_name,
+        date_of_birth, gender, class_id, address, phone_number, fee_status
+    ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING * `,
                 [
                     student.admission_number, student.roll_number, student.full_name,
                     student.father_name, student.mother_name, student.date_of_birth,
@@ -214,6 +299,8 @@ router.post('/bulk-upload', authenticateToken, uploadExcel.single('file'), async
             );
             insertedStudents.push(result.rows[0]);
         }
+
+        await logAction(req.user.id, req.user.role, 'BULK_UPLOAD_STUDENTS', { count: insertedStudents.length, classId });
 
         res.status(201).json({
             message: `Successfully uploaded ${insertedStudents.length} students`,
@@ -330,21 +417,21 @@ router.post('/bulk-update', authenticateToken, uploadExcel.single('file'), async
             let updatedCount = 0;
             for (const student of students) {
                 const result = await client.query(
-                    `UPDATE students SET 
-                        admission_number = $1,
-                        roll_number = $2,
-                        full_name = $3,
-                        father_name = $4,
-                        mother_name = $5,
-                        date_of_birth = $6,
-                        gender = $7,
-                        phone_number = $8,
-                        email = $9,
-                        address = $10,
-                        blood_group = $11,
-                        previous_school = $12,
-                        admission_date = $13,
-                        updated_at = CURRENT_TIMESTAMP
+                    `UPDATE students SET
+admission_number = $1,
+    roll_number = $2,
+    full_name = $3,
+    father_name = $4,
+    mother_name = $5,
+    date_of_birth = $6,
+    gender = $7,
+    phone_number = $8,
+    email = $9,
+    address = $10,
+    blood_group = $11,
+    previous_school = $12,
+    admission_date = $13,
+    updated_at = CURRENT_TIMESTAMP
                     WHERE id = $14`,
                     [
                         student.admission_number,
@@ -382,6 +469,69 @@ router.post('/bulk-update', authenticateToken, uploadExcel.single('file'), async
     } catch (error) {
         console.error('Bulk update error:', error);
         res.status(500).json({ error: 'Failed to update students' });
+    }
+});
+
+// Upload student document
+router.post('/:id/documents', authenticateToken, uploadDocument.single('file'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { documentName } = req.body;
+
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const documentUrl = `/uploads/documents/${req.file.filename}`.trim().replace(/\s+/g, '');
+
+        const result = await pool.query(
+            'INSERT INTO student_documents (student_id, document_name, document_url) VALUES ($1, $2, $3) RETURNING *',
+            [id, req.file.originalname, documentUrl]
+        );
+
+        res.status(201).json(result.rows[0]);
+    } catch (error) {
+        console.error('Document upload error:', error);
+        res.status(500).json({ error: 'Failed to upload document' });
+    }
+});
+
+// Get student documents
+router.get('/:id/documents', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query(
+            'SELECT * FROM student_documents WHERE student_id = $1 ORDER BY created_at DESC',
+            [id]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Get documents error:', error);
+        res.status(500).json({ error: 'Failed to fetch documents' });
+    }
+});
+
+// Delete student document
+router.delete('/documents/:docId', authenticateToken, async (req, res) => {
+    try {
+        const { docId } = req.params;
+        const result = await pool.query('DELETE FROM student_documents WHERE id = $1 RETURNING *', [docId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Document not found' });
+        }
+
+        // Optional: Delete file from disk
+        const doc = result.rows[0];
+        const filePath = path.join(process.cwd(), doc.document_url);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+
+        res.json({ message: 'Document deleted successfully' });
+    } catch (error) {
+        console.error('Delete document error:', error);
+        res.status(500).json({ error: 'Failed to delete document' });
     }
 });
 

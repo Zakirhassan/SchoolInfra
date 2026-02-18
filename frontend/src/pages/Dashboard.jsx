@@ -126,7 +126,7 @@ export default function Dashboard() {
 
             <div className="mb-6">
                 <h1 className="text-3xl font-bold text-gray-800 mb-2">Dashboard</h1>
-                <p className="text-gray-600">Welcome back! Here's an overview of your school.</p>
+                <p className="text-gray-600">Welcome back! Here's an overview of Advance Skill Development Center.</p>
             </div>
 
             {/* Statistics Cards */}

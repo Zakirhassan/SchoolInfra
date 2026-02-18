@@ -1,22 +1,27 @@
 import { useState, useEffect } from 'react';
-import { MdAdd, MdEdit, MdDelete, MdPeople, MdBook } from 'react-icons/md';
+import { MdAdd, MdEdit, MdDelete, MdPeople, MdBook, MdPerson, MdCalendarToday, MdTimer, MdSchool } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import Breadcrumb from '../components/Breadcrumb';
 
 export default function Classes() {
+    const [teachers, setTeachers] = useState([]);
     const [classes, setClasses] = useState([]);
     const [students, setStudents] = useState([]);
     const [subjects, setSubjects] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [editingClass, setEditingClass] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [showSubjectModal, setShowSubjectModal] = useState(false);
-    const [editingClass, setEditingClass] = useState(null);
     const [selectedClassForSubjects, setSelectedClassForSubjects] = useState(null);
+    const [loading, setLoading] = useState(true);
     const [formData, setFormData] = useState({
         className: '',
         section: '',
-        monthlyFee: ''
+        monthlyFee: '',
+        duration: '',
+        startDate: '',
+        tentativeEndDate: '',
+        teacherId: ''
     });
     const [subjectFormData, setSubjectFormData] = useState({
         subjectName: '',
@@ -29,14 +34,16 @@ export default function Classes() {
 
     const fetchData = async () => {
         try {
-            const [classesRes, studentsRes, subjectsRes] = await Promise.all([
+            const [classesRes, studentsRes, subjectsRes, teachersRes] = await Promise.all([
                 api.get('/classes'),
                 api.get('/students'),
-                api.get('/subjects')
+                api.get('/subjects'),
+                api.get('/teachers')
             ]);
             setClasses(classesRes.data);
             setStudents(studentsRes.data);
             setSubjects(subjectsRes.data);
+            setTeachers(teachersRes.data);
         } catch (error) {
             toast.error('Failed to fetch data');
         } finally {
@@ -78,7 +85,11 @@ export default function Classes() {
         setFormData({
             className: cls.class_name,
             section: cls.section,
-            monthlyFee: cls.monthly_fee
+            monthlyFee: cls.monthly_fee,
+            duration: cls.duration || '',
+            startDate: cls.start_date ? cls.start_date.split('T')[0] : '',
+            tentativeEndDate: cls.tentative_end_date ? cls.tentative_end_date.split('T')[0] : '',
+            teacherId: cls.teacher_id || ''
         });
         setShowModal(true);
     };
@@ -86,7 +97,15 @@ export default function Classes() {
     const handleCloseModal = () => {
         setShowModal(false);
         setEditingClass(null);
-        setFormData({ className: '', section: '', monthlyFee: '' });
+        setFormData({
+            className: '',
+            section: '',
+            monthlyFee: '',
+            duration: '',
+            startDate: '',
+            tentativeEndDate: '',
+            teacherId: ''
+        });
     };
 
     const handleManageSubjects = (cls) => {
@@ -140,16 +159,16 @@ export default function Classes() {
 
     return (
         <div className="fade-in">
-            <Breadcrumb items={[{ label: 'Classes' }]} />
+            <Breadcrumb items={[{ label: 'Courses' }]} />
 
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2">Class Management</h1>
-                    <p className="text-gray-600">Manage classes, sections, and subjects</p>
+                    <h1 className="text-3xl font-bold text-gray-800 mb-2">Course Management</h1>
+                    <p className="text-gray-600">Register courses, batch schedules, and associated subjects</p>
                 </div>
                 <button onClick={() => setShowModal(true)} className="btn btn-primary">
                     <MdAdd size={20} />
-                    Add Class
+                    Add Course
                 </button>
             </div>
 
@@ -160,9 +179,9 @@ export default function Classes() {
                         <div className="flex items-start justify-between mb-4">
                             <div>
                                 <h3 className="text-2xl font-bold text-gray-800">
-                                    {cls.class_name}-{cls.section}
+                                    {cls.class_name}
                                 </h3>
-                                <p className="text-sm text-gray-600">Class {cls.class_name}, Section {cls.section}</p>
+                                <p className="text-sm text-gray-600">Batch: {cls.section}</p>
                             </div>
                             <div className="flex gap-2">
                                 <button onClick={() => handleEdit(cls)} className="text-blue-600 hover:text-blue-800">
@@ -176,15 +195,30 @@ export default function Classes() {
 
                         <div className="space-y-3 mb-4">
                             <div className="flex items-center gap-2 text-gray-700">
-                                <MdPeople className="text-primary-600" size={20} />
+                                <MdPerson className="text-primary-600" size={20} />
+                                <span className="font-medium">Teacher: {cls.teacher_name || 'Not assigned'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-gray-700">
+                                <MdTimer className="text-orange-600" size={20} />
+                                <span className="font-medium">Duration: {cls.duration || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-gray-700">
+                                <MdCalendarToday className="text-blue-600" size={20} />
+                                <span className="text-sm">
+                                    {cls.start_date ? new Date(cls.start_date).toLocaleDateString() : 'TBD'} -
+                                    {cls.tentative_end_date ? new Date(cls.tentative_end_date).toLocaleDateString() : 'TBD'}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2 text-gray-700">
+                                <MdPeople className="text-green-600" size={20} />
                                 <span className="font-medium">{getStudentCount(cls.id)} Students</span>
                             </div>
                             <div className="flex items-center gap-2 text-gray-700">
                                 <MdBook className="text-purple-600" size={20} />
                                 <span className="font-medium">{getSubjectCount(cls.id)} Subjects</span>
                             </div>
-                            <div className="text-gray-700">
-                                <span className="font-semibold">Monthly Fee:</span> ₹{cls.monthly_fee}
+                            <div className="bg-gray-50 p-2 rounded text-gray-700">
+                                <span className="font-semibold">Fee:</span> ₹{cls.monthly_fee} / month
                             </div>
                         </div>
 
@@ -212,32 +246,32 @@ export default function Classes() {
                     <div className="modal-content">
                         <div className="p-6 border-b">
                             <h2 className="text-2xl font-bold text-gray-800">
-                                {editingClass ? 'Edit Class' : 'Add New Class'}
+                                {editingClass ? 'Edit Course' : 'Add New Course'}
                             </h2>
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6">
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Class Name</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Course Name</label>
                                     <input
                                         type="text"
                                         value={formData.className}
                                         onChange={(e) => setFormData({ ...formData, className: e.target.value })}
                                         className="input-field"
-                                        placeholder="e.g., 10"
+                                        placeholder="e.g., Digital Marketing"
                                         required
                                     />
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Section</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Batch / Section</label>
                                     <input
                                         type="text"
                                         value={formData.section}
                                         onChange={(e) => setFormData({ ...formData, section: e.target.value })}
                                         className="input-field"
-                                        placeholder="e.g., A"
+                                        placeholder="e.g., Morning"
                                         required
                                     />
                                 </div>
@@ -253,6 +287,53 @@ export default function Classes() {
                                         required
                                     />
                                 </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Duration</label>
+                                        <input
+                                            type="text"
+                                            value={formData.duration}
+                                            onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                                            className="input-field"
+                                            placeholder="e.g., 3 Months"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Assigned Teacher</label>
+                                        <select
+                                            value={formData.teacherId}
+                                            onChange={(e) => setFormData({ ...formData, teacherId: e.target.value })}
+                                            className="input-field"
+                                        >
+                                            <option value="">Select a Teacher</option>
+                                            {teachers.map(t => (
+                                                <option key={t.id} value={t.id}>{t.full_name}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                                        <input
+                                            type="date"
+                                            value={formData.startDate}
+                                            onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                            className="input-field"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Tentative End Date</label>
+                                        <input
+                                            type="date"
+                                            value={formData.tentativeEndDate}
+                                            onChange={(e) => setFormData({ ...formData, tentativeEndDate: e.target.value })}
+                                            className="input-field"
+                                        />
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="flex gap-3 justify-end mt-6">
@@ -260,7 +341,7 @@ export default function Classes() {
                                     Cancel
                                 </button>
                                 <button type="submit" className="btn btn-primary">
-                                    {editingClass ? 'Update Class' : 'Create Class'}
+                                    {editingClass ? 'Update Course' : 'Create Course'}
                                 </button>
                             </div>
                         </form>
@@ -274,7 +355,7 @@ export default function Classes() {
                     <div className="modal-content max-w-3xl">
                         <div className="p-6 border-b">
                             <h2 className="text-2xl font-bold text-gray-800">
-                                Manage Subjects - Class {selectedClassForSubjects.class_name}-{selectedClassForSubjects.section}
+                                Manage Subjects - {selectedClassForSubjects.class_name}
                             </h2>
                         </div>
 

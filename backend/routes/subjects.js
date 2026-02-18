@@ -1,6 +1,7 @@
-import express from 'express';
 import pool from '../config/database.js';
 import { authenticateToken } from '../config/auth.js';
+import { logAction } from '../config/audit.js';
+import express from 'express';
 
 const router = express.Router();
 
@@ -21,6 +22,16 @@ router.get('/', authenticateToken, async (req, res) => {
         if (classId) {
             query += ' WHERE s.class_id = $1';
             params.push(classId);
+
+            if (req.user.role === 'TEACHER') {
+                const courseCheck = await pool.query('SELECT teacher_id FROM classes WHERE id = $1', [classId]);
+                if (courseCheck.rows.length === 0 || courseCheck.rows[0].teacher_id !== req.user.id) {
+                    return res.status(403).json({ error: 'Access denied. You can only view subjects for your assigned courses.' });
+                }
+            }
+        } else if (req.user.role === 'TEACHER') {
+            query += ' WHERE c.teacher_id = $1';
+            params.push(req.user.id);
         }
 
         query += ' ORDER BY c.class_name, c.section, s.subject_name';
@@ -108,6 +119,16 @@ router.get('/exams', authenticateToken, async (req, res) => {
         if (classId) {
             query += ' WHERE e.class_id = $1';
             params.push(classId);
+
+            if (req.user.role === 'TEACHER') {
+                const courseCheck = await pool.query('SELECT teacher_id FROM classes WHERE id = $1', [classId]);
+                if (courseCheck.rows.length === 0 || courseCheck.rows[0].teacher_id !== req.user.id) {
+                    return res.status(403).json({ error: 'Access denied. You can only view exams for your assigned courses.' });
+                }
+            }
+        } else if (req.user.role === 'TEACHER') {
+            query += ' WHERE c.teacher_id = $1';
+            params.push(req.user.id);
         }
 
         query += ' ORDER BY e.exam_date DESC';
@@ -177,6 +198,30 @@ router.delete('/exams/:id', authenticateToken, async (req, res) => {
 
 // ===== MARKS =====
 
+// Get all marks for a class and exam
+router.get('/marks', authenticateToken, async (req, res) => {
+    try {
+        const { classId, examId } = req.query;
+
+        if (!classId || !examId) {
+            return res.status(400).json({ error: 'Class ID and Exam ID are required' });
+        }
+
+        const result = await pool.query(
+            `SELECT m.student_id, m.subject_id, m.marks_obtained
+             FROM marks m
+             JOIN students s ON m.student_id = s.id
+             WHERE s.class_id = $1 AND m.exam_id = $2`,
+            [classId, examId]
+        );
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Get marks error:', error);
+        res.status(500).json({ error: 'Failed to fetch marks' });
+    }
+});
+
 // Get marks for a student in an exam
 router.get('/marks/student/:studentId/exam/:examId', authenticateToken, async (req, res) => {
     try {
@@ -205,6 +250,20 @@ router.post('/marks', authenticateToken, async (req, res) => {
 
         if (!marks || !Array.isArray(marks)) {
             return res.status(400).json({ error: 'Marks array is required' });
+        }
+
+        // Verify teacher's access if not admin
+        if (req.user.role === 'TEACHER') {
+            const firstMark = marks[0];
+            if (firstMark) {
+                const courseResult = await pool.query(
+                    'SELECT teacher_id FROM classes WHERE id = (SELECT class_id FROM exams WHERE id = $1)',
+                    [firstMark.examId]
+                );
+                if (courseResult.rows.length === 0 || courseResult.rows[0].teacher_id !== req.user.id) {
+                    return res.status(403).json({ error: 'Access denied. You can only update marks for your assigned courses.' });
+                }
+            }
         }
 
         const insertedMarks = [];
@@ -241,6 +300,8 @@ router.post('/marks', authenticateToken, async (req, res) => {
 
             insertedMarks.push(result.rows[0]);
         }
+
+        await logAction(req.user.id, req.user.role, 'UPDATE_MARKS', { count: insertedMarks.length, examId: marks[0]?.examId });
 
         res.status(201).json({
             message: 'Marks saved successfully',

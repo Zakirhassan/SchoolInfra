@@ -7,11 +7,14 @@ import {
     MdAssessment,
     MdAttachMoney,
     MdFileDownload,
+    MdDescription,
     MdMenu,
     MdClose,
     MdLogout,
     MdChevronLeft,
-    MdChevronRight
+    MdChevronRight,
+    MdHistory,
+    MdSupervisorAccount
 } from 'react-icons/md';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -23,12 +26,17 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
 
     const menuItems = [
         { path: '/', icon: MdDashboard, label: 'Dashboard' },
-        { path: '/students', icon: MdPeople, label: 'Students' },
-        { path: '/classes', icon: MdSchool, label: 'Classes' },
-        { path: '/report-cards', icon: MdAssessment, label: 'Report Cards' },
-        { path: '/fees', icon: MdAttachMoney, label: 'Fees' },
-        { path: '/export', icon: MdFileDownload, label: 'Export Data' },
+        { path: '/students', icon: MdPeople, label: 'Students', roles: ['ADMIN', 'TEACHER'] },
+        { path: '/classes', icon: MdSchool, label: 'Courses', roles: ['ADMIN', 'TEACHER'] },
+        { path: '/attendance', icon: MdDescription, label: 'Attendance' },
+        { path: '/report-cards', icon: MdAssessment, label: 'Certificates', roles: ['ADMIN', 'TEACHER'] },
+        { path: '/teachers', icon: MdSupervisorAccount, label: 'Teachers', roles: ['ADMIN'] },
+        { path: '/audit-logs', icon: MdHistory, label: 'Audit Logs', roles: ['ADMIN'] },
+        { path: '/fees', icon: MdAttachMoney, label: 'Fees', roles: ['ADMIN'] },
+        { path: '/export', icon: MdFileDownload, label: 'Export Data', roles: ['ADMIN'] },
     ];
+
+    const filteredMenuItems = menuItems.filter(item => !item.roles || item.roles.includes(user?.role));
 
     const handleLogout = () => {
         logout();
@@ -54,13 +62,11 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-700">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
-                            S
-                        </div>
+                        <img src="/logo.png" alt="ASDC Logo" className="w-10 h-10 object-contain" />
                         {!collapsed && (
                             <div>
-                                <h1 className="text-white font-bold text-lg">School MS</h1>
-                                <p className="text-xs text-gray-400">Management System</p>
+                                <h1 className="text-white font-bold text-lg leading-tight">ASDC</h1>
+                                <p className="text-[10px] text-gray-400 leading-tight">Advance Skills Development Center</p>
                             </div>
                         )}
                     </div>
@@ -84,7 +90,7 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
 
                 {/* Navigation */}
                 <nav className="flex-1 py-4 overflow-y-auto">
-                    {menuItems.map((item) => {
+                    {filteredMenuItems.map((item) => {
                         const Icon = item.icon;
                         return (
                             <Link
@@ -111,7 +117,7 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
                                 <p className="text-white text-sm font-medium truncate">
                                     {user?.fullName || user?.username}
                                 </p>
-                                <p className="text-gray-400 text-xs">Administrator</p>
+                                <p className="text-gray-400 text-xs capitalize">{user?.role?.toLowerCase() || 'User'}</p>
                             </div>
                         </div>
                     ) : (
