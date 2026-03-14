@@ -42,45 +42,54 @@ export default function Login() {
                             <MdSchool className="text-primary-600" size={32} />
                         </div>
                         <div>
-                            <h1 className="text-white text-2xl font-bold">School MS</h1>
-                            <p className="text-blue-100 text-sm">Management System</p>
+                            <h1 className="text-white text-2xl font-bold">ASDC-ZRM</h1>
+                            <p className="text-blue-100 text-sm font-medium uppercase tracking-wider">Advance Skill Development Center</p>
                         </div>
                     </div>
 
                     <h2 className="text-4xl font-bold text-white mb-4">
-                        Welcome Back!
+                        ASDC - School Management System
                     </h2>
                     <p className="text-blue-100 text-lg">
-                        Manage your school efficiently with our comprehensive management system.
+                        Empowering education with advanced management tools.
                     </p>
                 </div>
 
                 <div className="relative z-10 space-y-4">
-                    <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <div className="flex items-start gap-4">
+                        <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0 text-white">
+                            ✓
+                        </div>
+                        <div>
+                            <h3 className="text-white font-semibold">Admin Management</h3>
+                            <p className="text-blue-100 text-sm">System configuration and security control</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-4">
+                        <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0 text-white">
+                            ✓
+                        </div>
+                        <div>
+                            <h3 className="text-white font-semibold">Teacher Management</h3>
+                            <p className="text-blue-100 text-sm">Manage staff and academic schedules</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-4">
+                        <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0 text-white">
                             ✓
                         </div>
                         <div>
                             <h3 className="text-white font-semibold">Student Management</h3>
-                            <p className="text-blue-100 text-sm">Track and manage all student information</p>
+                            <p className="text-blue-100 text-sm">Complete student lifecycle tracking</p>
                         </div>
                     </div>
-                    <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0">
-                            ✓
-                        </div>
-                        <div>
-                            <h3 className="text-white font-semibold">Fee Tracking</h3>
-                            <p className="text-blue-100 text-sm">Monitor fee collection and payments</p>
-                        </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <div className="flex items-start gap-4">
+                        <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0 text-white">
                             ✓
                         </div>
                         <div>
                             <h3 className="text-white font-semibold">Report Generation</h3>
-                            <p className="text-blue-100 text-sm">Create ID cards and report cards instantly</p>
+                            <p className="text-blue-100 text-sm">Automated ID cards and certificates</p>
                         </div>
                     </div>
                 </div>
@@ -95,8 +104,8 @@ export default function Login() {
                             <MdSchool className="text-white" size={28} />
                         </div>
                         <div>
-                            <h1 className="text-gray-800 text-xl font-bold">School MS</h1>
-                            <p className="text-gray-600 text-sm">Management System</p>
+                            <h1 className="text-gray-800 text-xl font-bold">ASDC-ZRM</h1>
+                            <p className="text-gray-600 text-sm">Advance Skill Development Center</p>
                         </div>
                     </div>
 
@@ -175,7 +184,7 @@ export default function Login() {
                     </div>
 
                     <p className="text-center text-sm text-gray-600 mt-6">
-                        © 2026 School Management System. All rights reserved.
+                        © 2026 ASDC. All rights reserved.
                     </p>
                 </div>
             </div>
