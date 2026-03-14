@@ -19,7 +19,8 @@ export default function ReportCards() {
     const [examFormData, setExamFormData] = useState({
         examName: '',
         academicYear: '2025-2026',
-        examDate: ''
+        examDate: '',
+        weightage: 100
     });
 
     useEffect(() => {
@@ -97,12 +98,13 @@ export default function ReportCards() {
                 examName: examFormData.examName,
                 classId: selectedClass,
                 academicYear: examFormData.academicYear,
-                examDate: examFormData.examDate
+                examDate: examFormData.examDate,
+                weightage: parseInt(examFormData.weightage)
             });
             toast.success('Exam created successfully!');
             fetchExams();
             setShowExamModal(false);
-            setExamFormData({ examName: '', academicYear: '2025-2026', examDate: '' });
+            setExamFormData({ examName: '', academicYear: '2025-2026', examDate: '', weightage: 100 });
         } catch (error) {
             toast.error(error.response?.data?.error || 'Failed to create exam');
         }
@@ -315,6 +317,7 @@ export default function ReportCards() {
                                                     Date: {new Date(exam.exam_date).toLocaleDateString()}
                                                 </p>
                                             )}
+                                            <p className="text-sm font-bold text-primary-600 mt-1">Weightage: {exam.weightage}%</p>
                                         </div>
                                         <button
                                             onClick={() => handleDeleteExam(exam.id)}
@@ -612,6 +615,21 @@ export default function ReportCards() {
                                         onChange={(e) => setExamFormData({ ...examFormData, examDate: e.target.value })}
                                         className="input-field"
                                     />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Weightage (%)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        value={examFormData.weightage}
+                                        onChange={(e) => setExamFormData({ ...examFormData, weightage: e.target.value })}
+                                        className="input-field"
+                                        placeholder="e.g., 20"
+                                        required
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Total weightage for all exams in a course must be 100%.</p>
                                 </div>
                             </div>
 

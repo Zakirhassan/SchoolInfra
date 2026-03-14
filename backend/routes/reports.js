@@ -24,7 +24,7 @@ router.get('/student/:studentId/exam/:examId', authenticateToken, async (req, re
 
         // Get student details
         const studentResult = await pool.query(
-            `SELECT s.*, c.class_name as course_name, c.section 
+            `SELECT s.*, c.class_name as course_name, c.section, c.start_date, c.tentative_end_date
              FROM students s
              LEFT JOIN classes c ON s.class_id = c.id
              WHERE s.id = $1`,

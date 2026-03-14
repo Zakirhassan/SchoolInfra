@@ -144,15 +144,30 @@ router.get('/exams', authenticateToken, async (req, res) => {
 // Create exam
 router.post('/exams', authenticateToken, async (req, res) => {
     try {
-        const { examName, classId, examDate, academicYear } = req.body;
+        const { examName, classId, examDate, academicYear, weightage } = req.body;
 
         if (!examName || !classId || !academicYear) {
             return res.status(400).json({ error: 'Exam name, class ID, and academic year are required' });
         }
 
+        const currentWeightage = weightage || 100;
+
+        // Validation: Total weightage for a course must be <= 100
+        const totalWeightResult = await pool.query(
+            'SELECT SUM(weightage) as total FROM exams WHERE class_id = $1',
+            [classId]
+        );
+        const totalWeight = parseInt(totalWeightResult.rows[0].total || 0);
+
+        if (totalWeight + currentWeightage > 100) {
+            return res.status(400).json({
+                error: `Total weightage for this course would exceed 100% (Current total: ${totalWeight}%)`
+            });
+        }
+
         const result = await pool.query(
-            'INSERT INTO exams (exam_name, class_id, exam_date, academic_year) VALUES ($1, $2, $3, $4) RETURNING *',
-            [examName, classId, examDate, academicYear]
+            'INSERT INTO exams (exam_name, class_id, exam_date, academic_year, weightage) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [examName, classId, examDate, academicYear, currentWeightage]
         );
 
         res.status(201).json(result.rows[0]);
@@ -166,11 +181,33 @@ router.post('/exams', authenticateToken, async (req, res) => {
 router.put('/exams/:id', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        const { examName, examDate, academicYear } = req.body;
+        const { examName, examDate, academicYear, weightage } = req.body;
+
+        if (weightage !== undefined) {
+            // Get class_id and current weightage
+            const examInfo = await pool.query('SELECT class_id, weightage FROM exams WHERE id = $1', [id]);
+            if (examInfo.rows.length === 0) {
+                return res.status(404).json({ error: 'Exam not found' });
+            }
+            const { class_id, weightage: oldWeightage } = examInfo.rows[0];
+
+            // Validation: Total weightage for a course must be <= 100
+            const totalWeightResult = await pool.query(
+                'SELECT SUM(weightage) as total FROM exams WHERE class_id = $1 AND id != $2',
+                [class_id, id]
+            );
+            const otherWeight = parseInt(totalWeightResult.rows[0].total || 0);
+
+            if (otherWeight + weightage > 100) {
+                return res.status(400).json({
+                    error: `Total weightage for this course would exceed 100% (Current total excluding this: ${otherWeight}%)`
+                });
+            }
+        }
 
         const result = await pool.query(
-            'UPDATE exams SET exam_name = $1, exam_date = $2, academic_year = $3 WHERE id = $4 RETURNING *',
-            [examName, examDate, academicYear, id]
+            'UPDATE exams SET exam_name = $1, exam_date = $2, academic_year = $3, weightage = COALESCE($5, weightage) WHERE id = $4 RETURNING *',
+            [examName, examDate, academicYear, id, weightage]
         );
 
         if (result.rows.length === 0) {

@@ -24,11 +24,11 @@ const IDCARD_TEMPLATE = path.join(TEMPLATES_DIR, 'IDCARD_TEMPLATE.pdf');
 //  • Student ID    → bottom-left (bold)
 // ─────────────────────────────────────────────────────────────────────────────
 const CERT = {
-    studentName: { x: 310, y: 330, size: 18, bold: true },
-    courseName: { x: 360, y: 278, size: 13, bold: false },
-    startDate: { x: 258, y: 248, size: 12, bold: false },
-    endDate: { x: 520, y: 248, size: 12, bold: false },
-    grade: { x: 430, y: 218, size: 13, bold: true },
+    studentName: { x: 310, y: 315, size: 18, bold: true },
+    courseName: { x: 425, y: 288, size: 13, bold: true },
+    startDate: { x: 400, y: 248, size: 12, bold: true },
+    endDate: { x: 580, y: 248, size: 12, bold: true },
+    grade: { x: 470, y: 208, size: 13, bold: true },
     studentId: { x: 78, y: 98, size: 11, bold: true },
 };
 
@@ -51,7 +51,7 @@ const IDCARD = {
     studentName: { x: 80, y: 98, size: 8, bold: true },
     fatherName: { x: 80, y: 89, size: 8, bold: true },
     courseName: { x: 60, y: 78, size: 8, bold: true },
-    batchNo: { x: 60, y: 66, size: 8, bold: true },
+    batchNo: { x: 50, y: 66, size: 8, bold: true },
     dob: { x: 60, y: 55, size: 8, bold: true },
     contactNo: { x: 80, y: 45, size: 8, bold: true },
 };
@@ -97,6 +97,41 @@ function fmtDate(d) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Photo embedding helper
+// photo_url is like "/uploads/photos/photo-xxx.jpg"
+// ID card photo box: adjust x, y, width, height to match your template's
+// rounded-rectangle placeholder.
+// ─────────────────────────────────────────────────────────────────────────────
+const PHOTO_BOX = { x: 62, y: 120, width: 50, height: 50 }; // centered (126 pts is center)
+
+async function embedPhoto(pdfDoc, page, photoUrl) {
+    if (!photoUrl) return;
+    try {
+        // Convert URL path → absolute file path
+        // photo_url looks like "/uploads/photos/filename.jpg"
+        const relPath = photoUrl.startsWith('/') ? photoUrl.slice(1) : photoUrl;
+        const absPath = path.join(__dirname, '..', relPath);
+
+        const imgBytes = await fs.readFile(absPath);
+        const ext = path.extname(absPath).toLowerCase();
+
+        let img;
+        if (ext === '.png') {
+            img = await pdfDoc.embedPng(imgBytes);
+        } else {
+            // treat everything else (jpg, jpeg, webp) as jpeg
+            img = await pdfDoc.embedJpg(imgBytes);
+        }
+
+        const { x, y, width, height } = PHOTO_BOX;
+        page.drawImage(img, { x, y, width, height });
+    } catch (err) {
+        // If photo doesn't exist or can't be embedded, skip silently
+        console.warn('Could not embed student photo:', err.message);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Certificate
 // ─────────────────────────────────────────────────────────────────────────────
 export const generateReportCard = async (student, marks, examInfo, schoolInfo) => {
@@ -106,9 +141,9 @@ export const generateReportCard = async (student, marks, examInfo, schoolInfo) =
     const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     drawField(page, student.full_name, CERT.studentName, normal, bold);
-    drawField(page, student.class_name, CERT.courseName, normal, bold);
-    drawField(page, fmtDate(examInfo.start_date), CERT.startDate, normal, bold);
-    drawField(page, fmtDate(examInfo.end_date), CERT.endDate, normal, bold);
+    drawField(page, student.course_name || student.class_name, CERT.courseName, normal, bold);
+    drawField(page, fmtDate(student.start_date), CERT.startDate, normal, bold);
+    drawField(page, fmtDate(student.tentative_end_date), CERT.endDate, normal, bold);
     drawField(page, calcGrade(marks), CERT.grade, normal, bold);
     drawField(page, student.admission_number, CERT.studentId, normal, bold);
 
@@ -130,6 +165,10 @@ export const generateIDCard = async (student, schoolInfo) => {
     drawField(page, student.roll_number, IDCARD.batchNo, normal, bold);
     drawField(page, fmtDate(student.date_of_birth), IDCARD.dob, normal, bold);
     drawField(page, student.phone_number, IDCARD.contactNo, normal, bold);
+
+    if (student.photo_url) {
+        await embedPhoto(pdfDoc, page, student.photo_url);
+    }
 
     return Buffer.from(await pdfDoc.save());
 };
@@ -153,6 +192,10 @@ export const generateBulkIDCards = async (students, schoolInfo) => {
         drawField(page, student.roll_number, IDCARD.batchNo, normal, bold);
         drawField(page, fmtDate(student.date_of_birth), IDCARD.dob, normal, bold);
         drawField(page, student.phone_number, IDCARD.contactNo, normal, bold);
+
+        if (student.photo_url) {
+            await embedPhoto(srcDoc, page, student.photo_url);
+        }
 
         const [copied] = await merged.copyPages(srcDoc, [0]);
         merged.addPage(copied);

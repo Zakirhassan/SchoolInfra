@@ -32,6 +32,30 @@ export default function Classes() {
         fetchData();
     }, []);
 
+    useEffect(() => {
+        if (formData.startDate && formData.tentativeEndDate) {
+            const start = new Date(formData.startDate);
+            const end = new Date(formData.tentativeEndDate);
+            if (!isNaN(start) && !isNaN(end)) {
+                const diffTime = Math.abs(end - start);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                let durationText = '';
+                if (diffDays >= 30) {
+                    const months = Math.floor(diffDays / 30);
+                    const remainingDays = diffDays % 30;
+                    durationText = `${months} Month${months > 1 ? 's' : ''}`;
+                    if (remainingDays > 0) {
+                        durationText += ` ${remainingDays} Day${remainingDays > 1 ? 's' : ''}`;
+                    }
+                } else {
+                    durationText = `${diffDays} Day${diffDays > 1 ? 's' : ''}`;
+                }
+                setFormData(prev => ({ ...prev, duration: durationText }));
+            }
+        }
+    }, [formData.startDate, formData.tentativeEndDate]);
+
     const fetchData = async () => {
         try {
             const [classesRes, studentsRes, subjectsRes, teachersRes] = await Promise.all([
@@ -294,9 +318,9 @@ export default function Classes() {
                                         <input
                                             type="text"
                                             value={formData.duration}
-                                            onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                                            className="input-field"
-                                            placeholder="e.g., 3 Months"
+                                            className="input-field bg-gray-50 cursor-not-allowed"
+                                            placeholder="Duration (Auto-calculated)"
+                                            readOnly
                                         />
                                     </div>
                                     <div>
