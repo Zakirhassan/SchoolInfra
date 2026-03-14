@@ -48,10 +48,10 @@ export default function Login() {
                     </div>
 
                     <h2 className="text-4xl font-bold text-white mb-4">
-                        ASDC - Management System
+                        Welcome Back!
                     </h2>
                     <p className="text-blue-100 text-lg">
-                        Empowering education with advanced management tools.
+                        Manage your ASDC-ZRM efficiently with our comprehensive management system.
                     </p>
                 </div>
 
