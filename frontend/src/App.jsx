@@ -4,12 +4,16 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import StudentDashboard from './pages/StudentDashboard';
 import Students from './pages/Students';
 import Classes from './pages/Classes';
 import IDCards from './pages/IDCards';
 import ReportCards from './pages/ReportCards';
 import Fees from './pages/Fees';
+import Attendance from './pages/Attendance';
 import Export from './pages/Export';
+import Teachers from './pages/Teachers';
+import AuditLogs from './pages/AuditLogs';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 
@@ -53,6 +57,12 @@ const Layout = ({ children }) => {
   );
 };
 
+// Dashboard switcher based on role
+const DashboardSwitcher = () => {
+  const { user } = useAuth();
+  return user?.role === 'STUDENT' ? <StudentDashboard /> : <Dashboard />;
+};
+
 function App() {
   return (
     <AuthProvider>
@@ -88,7 +98,7 @@ function App() {
             element={
               <ProtectedRoute>
                 <Layout>
-                  <Dashboard />
+                  <DashboardSwitcher />
                 </Layout>
               </ProtectedRoute>
             }
@@ -144,6 +154,39 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <Fees />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/attendance"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <Attendance />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/teachers"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <Teachers />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/audit-logs"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <AuditLogs />
                 </Layout>
               </ProtectedRoute>
             }

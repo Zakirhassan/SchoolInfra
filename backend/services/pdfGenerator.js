@@ -1,296 +1,205 @@
-import PDFDocument from 'pdfkit';
-import fs from 'fs';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/**
- * Generate ID Card PDF for a student
- * @param {Object} student - Student data
- * @param {string} schoolInfo - School information
- * @returns {Promise<Buffer>} - PDF buffer
- */
-export const generateIDCard = (student, schoolInfo) => {
-    return new Promise((resolve, reject) => {
-        try {
-            const doc = new PDFDocument({ size: [243, 153], margin: 10 }); // Credit card size in points
-            const buffers = [];
+const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
+const CERTIFICATE_TEMPLATE = path.join(TEMPLATES_DIR, 'CERTIFICATE_TEMPLATE.pdf');
+const IDCARD_TEMPLATE = path.join(TEMPLATES_DIR, 'IDCARD_TEMPLATE.pdf');
 
-            doc.on('data', buffers.push.bind(buffers));
-            doc.on('end', () => {
-                const pdfBuffer = Buffer.concat(buffers);
-                resolve(pdfBuffer);
-            });
-
-            // Background with gradient effect
-            doc.rect(0, 0, 243, 153).fill('#1e40af');
-            doc.rect(0, 0, 243, 40).fill('#3b82f6');
-
-            // School name header
-            doc.fontSize(12).fillColor('#ffffff').font('Helvetica-Bold');
-            doc.text(schoolInfo.name || 'ABC School', 10, 10, { width: 223, align: 'center' });
-
-            doc.fontSize(7).fillColor('#e0e7ff').font('Helvetica');
-            doc.text('STUDENT ID CARD', 10, 28, { width: 223, align: 'center' });
-
-            // Student photo placeholder (if photo exists, you'd draw it here)
-            doc.rect(15, 50, 50, 60).fill('#ffffff');
-            if (student.photo_url) {
-                // In production, load and draw actual image
-                doc.fontSize(6).fillColor('#666666');
-                doc.text('PHOTO', 25, 75, { width: 30, align: 'center' });
-            } else {
-                doc.fontSize(6).fillColor('#666666');
-                doc.text('NO PHOTO', 20, 75, { width: 40, align: 'center' });
-            }
-
-            // Student details
-            const detailsX = 75;
-            let detailsY = 50;
-            const lineHeight = 12;
-
-            doc.fontSize(9).fillColor('#ffffff').font('Helvetica-Bold');
-            doc.text(student.full_name.toUpperCase(), detailsX, detailsY, { width: 150 });
-            detailsY += lineHeight;
-
-            doc.fontSize(7).fillColor('#e0e7ff').font('Helvetica');
-            doc.text(`Class: ${student.class_name}-${student.section}`, detailsX, detailsY);
-            detailsY += lineHeight;
-
-            doc.text(`Roll No: ${student.roll_number}`, detailsX, detailsY);
-            detailsY += lineHeight;
-
-            doc.text(`Adm No: ${student.admission_number}`, detailsX, detailsY);
-            detailsY += lineHeight;
-
-            doc.text(`DOB: ${new Date(student.date_of_birth).toLocaleDateString()}`, detailsX, detailsY);
-
-            // Footer
-            doc.fontSize(6).fillColor('#93c5fd');
-            doc.text(schoolInfo.academicYear || '2025-2026', 10, 135, { width: 223, align: 'center' });
-
-            doc.end();
-        } catch (error) {
-            reject(error);
-        }
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// CERTIFICATE FIELD POSITIONS
+// Based on landscape A4 template (approx 841 x 595 pts)
+// Y=0 is at the BOTTOM of the page in pdf-lib
+//
+// From the screenshot:
+//  • Student name  → on the line below "This Certificate is proudly presented to"
+//  • Course name   → 2nd blank (after "completed a ___ training course")
+//  • Start date    → 4th blank (after "from ___")
+//  • End date      → 5th blank (after "to ___")
+//  • Grade         → 6th blank (after "awarded grade ___")
+//  • Student ID    → bottom-left (bold)
+// ─────────────────────────────────────────────────────────────────────────────
+const CERT = {
+    studentName: { x: 310, y: 315, size: 18, bold: true },
+    courseName: { x: 425, y: 288, size: 13, bold: true },
+    startDate: { x: 400, y: 248, size: 12, bold: true },
+    endDate: { x: 580, y: 248, size: 12, bold: true },
+    grade: { x: 470, y: 208, size: 13, bold: true },
+    studentId: { x: 78, y: 98, size: 11, bold: true },
 };
 
-/**
- * Generate multiple ID cards on A4 pages (8 cards per page)
- * @param {Array} students - Array of student data
- * @param {string} schoolInfo - School information
- * @returns {Promise<Buffer>} - PDF buffer
- */
-export const generateBulkIDCards = (students, schoolInfo) => {
-    return new Promise((resolve, reject) => {
-        try {
-            const doc = new PDFDocument({ size: 'A4', margin: 20 });
-            const buffers = [];
-
-            doc.on('data', buffers.push.bind(buffers));
-            doc.on('end', () => {
-                const pdfBuffer = Buffer.concat(buffers);
-                resolve(pdfBuffer);
-            });
-
-            const cardWidth = 243;
-            const cardHeight = 153;
-            const cardsPerRow = 2;
-            const cardsPerColumn = 4;
-            const cardsPerPage = cardsPerRow * cardsPerColumn;
-            const horizontalSpacing = 30;
-            const verticalSpacing = 20;
-
-            students.forEach((student, index) => {
-                if (index > 0 && index % cardsPerPage === 0) {
-                    doc.addPage();
-                }
-
-                const cardIndex = index % cardsPerPage;
-                const row = Math.floor(cardIndex / cardsPerRow);
-                const col = cardIndex % cardsPerRow;
-
-                const x = 20 + col * (cardWidth + horizontalSpacing);
-                const y = 20 + row * (cardHeight + verticalSpacing);
-
-                // Draw ID card
-                doc.save();
-
-                // Background
-                doc.rect(x, y, cardWidth, cardHeight).fill('#1e40af');
-                doc.rect(x, y, cardWidth, 40).fill('#3b82f6');
-
-                // School name
-                doc.fontSize(12).fillColor('#ffffff').font('Helvetica-Bold');
-                doc.text(schoolInfo.name || 'ABC School', x + 10, y + 10, { width: cardWidth - 20, align: 'center' });
-
-                doc.fontSize(7).fillColor('#e0e7ff').font('Helvetica');
-                doc.text('STUDENT ID CARD', x + 10, y + 28, { width: cardWidth - 20, align: 'center' });
-
-                // Photo placeholder
-                doc.rect(x + 15, y + 50, 50, 60).fill('#ffffff');
-                doc.fontSize(6).fillColor('#666666');
-                doc.text('PHOTO', x + 25, y + 75, { width: 30, align: 'center' });
-
-                // Student details
-                const detailsX = x + 75;
-                let detailsY = y + 50;
-                const lineHeight = 12;
-
-                doc.fontSize(9).fillColor('#ffffff').font('Helvetica-Bold');
-                doc.text(student.full_name.toUpperCase(), detailsX, detailsY, { width: 150 });
-                detailsY += lineHeight;
-
-                doc.fontSize(7).fillColor('#e0e7ff').font('Helvetica');
-                doc.text(`Class: ${student.class_name}-${student.section}`, detailsX, detailsY);
-                detailsY += lineHeight;
-
-                doc.text(`Roll No: ${student.roll_number}`, detailsX, detailsY);
-                detailsY += lineHeight;
-
-                doc.text(`Adm No: ${student.admission_number}`, detailsX, detailsY);
-                detailsY += lineHeight;
-
-                doc.text(`DOB: ${new Date(student.date_of_birth).toLocaleDateString()}`, detailsX, detailsY);
-
-                // Footer
-                doc.fontSize(6).fillColor('#93c5fd');
-                doc.text(schoolInfo.academicYear || '2025-2026', x + 10, y + 135, { width: cardWidth - 20, align: 'center' });
-
-                doc.restore();
-            });
-
-            doc.end();
-        } catch (error) {
-            reject(error);
-        }
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// ID CARD FIELD POSITIONS
+// Template is portrait (approx 252 x 396 pts)
+// Y=0 is at the BOTTOM of the page
+//
+// From the screenshot the label lines are:
+//   Student Name :  ___
+//   Father's Name : ___
+//   Course :        ___
+//   Batch No :___  Time ___
+//   D.O.B. :        ___
+//   Contact No :    ___
+//
+// The text should appear AFTER the colon on each line.
+// ─────────────────────────────────────────────────────────────────────────────
+const IDCARD = {
+    studentName: { x: 80, y: 98, size: 8, bold: true },
+    fatherName: { x: 80, y: 89, size: 8, bold: true },
+    courseName: { x: 60, y: 78, size: 8, bold: true },
+    batchNo: { x: 50, y: 66, size: 8, bold: true },
+    dob: { x: 60, y: 55, size: 8, bold: true },
+    contactNo: { x: 80, y: 45, size: 8, bold: true },
 };
 
-/**
- * Generate Report Card PDF for a student
- * @param {Object} student - Student data
- * @param {Array} marks - Array of marks with subject details
- * @param {Object} examInfo - Exam information
- * @param {Object} schoolInfo - School information
- * @returns {Promise<Buffer>} - PDF buffer
- */
-export const generateReportCard = (student, marks, examInfo, schoolInfo) => {
-    return new Promise((resolve, reject) => {
-        try {
-            const doc = new PDFDocument({ size: 'A4', margin: 50 });
-            const buffers = [];
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+async function loadTemplate(templatePath) {
+    try {
+        await fs.access(templatePath);
+    } catch {
+        throw new Error(`Template not found: ${templatePath}`);
+    }
+    const bytes = await fs.readFile(templatePath);
+    return PDFDocument.load(bytes);
+}
 
-            doc.on('data', buffers.push.bind(buffers));
-            doc.on('end', () => {
-                const pdfBuffer = Buffer.concat(buffers);
-                resolve(pdfBuffer);
-            });
-
-            // Header
-            doc.fontSize(20).fillColor('#1e40af').font('Helvetica-Bold');
-            doc.text(schoolInfo.name || 'ABC School', { align: 'center' });
-
-            doc.fontSize(10).fillColor('#666666').font('Helvetica');
-            doc.text(schoolInfo.address || 'School Address', { align: 'center' });
-            doc.moveDown(0.5);
-
-            doc.fontSize(16).fillColor('#1e40af').font('Helvetica-Bold');
-            doc.text('REPORT CARD', { align: 'center' });
-            doc.moveDown(1);
-
-            // Student Information
-            doc.fontSize(11).fillColor('#000000').font('Helvetica');
-            doc.text(`Student Name: ${student.full_name}`, 50, doc.y);
-            doc.text(`Class: ${student.class_name}-${student.section}`, 350, doc.y - 11);
-            doc.moveDown(0.5);
-
-            doc.text(`Admission No: ${student.admission_number}`, 50, doc.y);
-            doc.text(`Roll No: ${student.roll_number}`, 350, doc.y - 11);
-            doc.moveDown(0.5);
-
-            doc.text(`Exam: ${examInfo.exam_name}`, 50, doc.y);
-            doc.text(`Academic Year: ${examInfo.academic_year}`, 350, doc.y - 11);
-            doc.moveDown(1.5);
-
-            // Marks Table
-            const tableTop = doc.y;
-            const tableLeft = 50;
-            const colWidths = [40, 200, 100, 100, 100];
-
-            // Table header
-            doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff');
-            doc.rect(tableLeft, tableTop, colWidths.reduce((a, b) => a + b), 25).fill('#3b82f6');
-
-            doc.text('S.No', tableLeft + 5, tableTop + 8, { width: colWidths[0] });
-            doc.text('Subject', tableLeft + colWidths[0] + 5, tableTop + 8, { width: colWidths[1] });
-            doc.text('Max Marks', tableLeft + colWidths[0] + colWidths[1] + 5, tableTop + 8, { width: colWidths[2] });
-            doc.text('Marks Obtained', tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, tableTop + 8, { width: colWidths[3] });
-            doc.text('Percentage', tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, tableTop + 8, { width: colWidths[4] });
-
-            // Table rows
-            let currentY = tableTop + 25;
-            let totalMarks = 0;
-            let totalMaxMarks = 0;
-
-            doc.fontSize(10).font('Helvetica').fillColor('#000000');
-
-            marks.forEach((mark, index) => {
-                const rowHeight = 25;
-                const bgColor = index % 2 === 0 ? '#f3f4f6' : '#ffffff';
-
-                doc.rect(tableLeft, currentY, colWidths.reduce((a, b) => a + b), rowHeight).fill(bgColor);
-
-                doc.fillColor('#000000');
-                doc.text((index + 1).toString(), tableLeft + 5, currentY + 8, { width: colWidths[0] });
-                doc.text(mark.subject_name, tableLeft + colWidths[0] + 5, currentY + 8, { width: colWidths[1] });
-                doc.text(mark.max_marks.toString(), tableLeft + colWidths[0] + colWidths[1] + 5, currentY + 8, { width: colWidths[2] });
-                doc.text(mark.marks_obtained.toString(), tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 8, { width: colWidths[3] });
-
-                const percentage = ((mark.marks_obtained / mark.max_marks) * 100).toFixed(2);
-                doc.text(`${percentage}%`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, currentY + 8, { width: colWidths[4] });
-
-                totalMarks += parseFloat(mark.marks_obtained);
-                totalMaxMarks += parseFloat(mark.max_marks);
-                currentY += rowHeight;
-            });
-
-            // Total row
-            doc.rect(tableLeft, currentY, colWidths.reduce((a, b) => a + b), 25).fill('#dbeafe');
-            doc.fontSize(11).font('Helvetica-Bold').fillColor('#1e40af');
-            doc.text('TOTAL', tableLeft + 5, currentY + 8, { width: colWidths[0] + colWidths[1] });
-            doc.text(totalMaxMarks.toString(), tableLeft + colWidths[0] + colWidths[1] + 5, currentY + 8, { width: colWidths[2] });
-            doc.text(totalMarks.toString(), tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + 5, currentY + 8, { width: colWidths[3] });
-
-            const overallPercentage = ((totalMarks / totalMaxMarks) * 100).toFixed(2);
-            doc.text(`${overallPercentage}%`, tableLeft + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 5, currentY + 8, { width: colWidths[4] });
-
-            currentY += 40;
-
-            // Grade calculation
-            let grade = 'F';
-            if (overallPercentage >= 90) grade = 'A+';
-            else if (overallPercentage >= 80) grade = 'A';
-            else if (overallPercentage >= 70) grade = 'B+';
-            else if (overallPercentage >= 60) grade = 'B';
-            else if (overallPercentage >= 50) grade = 'C';
-            else if (overallPercentage >= 40) grade = 'D';
-
-            doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000');
-            doc.text(`Overall Percentage: ${overallPercentage}%`, tableLeft, currentY);
-            doc.text(`Grade: ${grade}`, tableLeft + 250, currentY);
-
-            // Footer
-            doc.fontSize(9).font('Helvetica').fillColor('#666666');
-            doc.text('Principal Signature: _______________', tableLeft, 700);
-            doc.text('Date: _______________', tableLeft + 300, 700);
-
-            doc.end();
-        } catch (error) {
-            reject(error);
-        }
+function drawField(page, text, field, normalFont, boldFont) {
+    page.drawText(String(text || ''), {
+        x: field.x,
+        y: field.y,
+        size: field.size,
+        font: field.bold ? boldFont : normalFont,
+        color: rgb(0, 0, 0),
     });
+}
+
+function calcGrade(marks) {
+    let total = 0, max = 0;
+    marks.forEach(m => { total += parseFloat(m.marks_obtained || 0); max += parseFloat(m.max_marks || 0); });
+    const pct = max > 0 ? (total / max) * 100 : 0;
+    if (pct >= 90) return 'A+';
+    if (pct >= 80) return 'A';
+    if (pct >= 70) return 'B+';
+    if (pct >= 60) return 'B';
+    if (pct >= 50) return 'C';
+    if (pct >= 40) return 'D';
+    return 'F';
+}
+
+function fmtDate(d) {
+    return d ? new Date(d).toLocaleDateString('en-GB') : '';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Photo embedding helper
+// photo_url is like "/uploads/photos/photo-xxx.jpg"
+// ID card photo box: adjust x, y, width, height to match your template's
+// rounded-rectangle placeholder.
+// ─────────────────────────────────────────────────────────────────────────────
+const PHOTO_BOX = { x: 62, y: 120, width: 50, height: 50 }; // centered (126 pts is center)
+
+async function embedPhoto(pdfDoc, page, photoUrl) {
+    if (!photoUrl) return;
+    try {
+        // Convert URL path → absolute file path
+        // photo_url looks like "/uploads/photos/filename.jpg"
+        const relPath = photoUrl.startsWith('/') ? photoUrl.slice(1) : photoUrl;
+        const absPath = path.join(__dirname, '..', relPath);
+
+        const imgBytes = await fs.readFile(absPath);
+        const ext = path.extname(absPath).toLowerCase();
+
+        let img;
+        if (ext === '.png') {
+            img = await pdfDoc.embedPng(imgBytes);
+        } else {
+            // treat everything else (jpg, jpeg, webp) as jpeg
+            img = await pdfDoc.embedJpg(imgBytes);
+        }
+
+        const { x, y, width, height } = PHOTO_BOX;
+        page.drawImage(img, { x, y, width, height });
+    } catch (err) {
+        // If photo doesn't exist or can't be embedded, skip silently
+        console.warn('Could not embed student photo:', err.message);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Certificate
+// ─────────────────────────────────────────────────────────────────────────────
+export const generateReportCard = async (student, marks, examInfo, schoolInfo) => {
+    const pdfDoc = await loadTemplate(CERTIFICATE_TEMPLATE);
+    const page = pdfDoc.getPages()[0];
+    const normal = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    drawField(page, student.full_name, CERT.studentName, normal, bold);
+    drawField(page, student.course_name || student.class_name, CERT.courseName, normal, bold);
+    drawField(page, fmtDate(student.start_date), CERT.startDate, normal, bold);
+    drawField(page, fmtDate(student.tentative_end_date), CERT.endDate, normal, bold);
+    drawField(page, calcGrade(marks), CERT.grade, normal, bold);
+    drawField(page, student.admission_number, CERT.studentId, normal, bold);
+
+    return Buffer.from(await pdfDoc.save());
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Single ID Card
+// ─────────────────────────────────────────────────────────────────────────────
+export const generateIDCard = async (student, schoolInfo) => {
+    const pdfDoc = await loadTemplate(IDCARD_TEMPLATE);
+    const page = pdfDoc.getPages()[0];
+    const normal = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    drawField(page, student.full_name, IDCARD.studentName, normal, bold);
+    drawField(page, student.father_name, IDCARD.fatherName, normal, bold);
+    drawField(page, student.class_name, IDCARD.courseName, normal, bold);
+    drawField(page, student.roll_number, IDCARD.batchNo, normal, bold);
+    drawField(page, fmtDate(student.date_of_birth), IDCARD.dob, normal, bold);
+    drawField(page, student.phone_number, IDCARD.contactNo, normal, bold);
+
+    if (student.photo_url) {
+        await embedPhoto(pdfDoc, page, student.photo_url);
+    }
+
+    return Buffer.from(await pdfDoc.save());
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bulk ID Cards (one page per student)
+// ─────────────────────────────────────────────────────────────────────────────
+export const generateBulkIDCards = async (students, schoolInfo) => {
+    const templateBytes = await fs.readFile(IDCARD_TEMPLATE);
+    const merged = await PDFDocument.create();
+
+    for (const student of students) {
+        const srcDoc = await PDFDocument.load(templateBytes);
+        const normal = await srcDoc.embedFont(StandardFonts.Helvetica);
+        const bold = await srcDoc.embedFont(StandardFonts.HelveticaBold);
+        const page = srcDoc.getPages()[0];
+
+        drawField(page, student.full_name, IDCARD.studentName, normal, bold);
+        drawField(page, student.father_name, IDCARD.fatherName, normal, bold);
+        drawField(page, student.class_name, IDCARD.courseName, normal, bold);
+        drawField(page, student.roll_number, IDCARD.batchNo, normal, bold);
+        drawField(page, fmtDate(student.date_of_birth), IDCARD.dob, normal, bold);
+        drawField(page, student.phone_number, IDCARD.contactNo, normal, bold);
+
+        if (student.photo_url) {
+            await embedPhoto(srcDoc, page, student.photo_url);
+        }
+
+        const [copied] = await merged.copyPages(srcDoc, [0]);
+        merged.addPage(copied);
+    }
+
+    return Buffer.from(await merged.save());
 };

@@ -13,6 +13,9 @@ import feeRoutes from './routes/fees.js';
 import idCardRoutes from './routes/idcards.js';
 import reportRoutes from './routes/reports.js';
 import exportRoutes from './routes/export.js';
+import attendanceRoutes from './routes/attendance.js';
+import teacherRoutes from './routes/teachers.js';
+import auditRoutes from './routes/auditLogs.js';
 
 dotenv.config();
 
@@ -44,6 +47,9 @@ app.use('/api/fees', feeRoutes);
 app.use('/api/idcards', idCardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/teachers', teacherRoutes);
+app.use('/api/audit', auditRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

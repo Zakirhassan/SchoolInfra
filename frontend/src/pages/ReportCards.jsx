@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { MdAdd, MdEdit, MdDelete, MdSave, MdFileDownload, MdAssessment } from 'react-icons/md';
+import { MdAdd, MdEdit, MdDelete, MdSave, MdFileDownload, MdAssessment, MdPublish, MdUnpublished } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import Breadcrumb from '../components/Breadcrumb';
+import { useState, useEffect } from 'react';
 
 export default function ReportCards() {
     const [activeTab, setActiveTab] = useState('enter-marks'); // 'exams', 'enter-marks', 'generate'
@@ -19,7 +19,8 @@ export default function ReportCards() {
     const [examFormData, setExamFormData] = useState({
         examName: '',
         academicYear: '2025-2026',
-        examDate: ''
+        examDate: '',
+        weightage: 100
     });
 
     useEffect(() => {
@@ -97,12 +98,13 @@ export default function ReportCards() {
                 examName: examFormData.examName,
                 classId: selectedClass,
                 academicYear: examFormData.academicYear,
-                examDate: examFormData.examDate
+                examDate: examFormData.examDate,
+                weightage: parseInt(examFormData.weightage)
             });
             toast.success('Exam created successfully!');
             fetchExams();
             setShowExamModal(false);
-            setExamFormData({ examName: '', academicYear: '2025-2026', examDate: '' });
+            setExamFormData({ examName: '', academicYear: '2025-2026', examDate: '', weightage: 100 });
         } catch (error) {
             toast.error(error.response?.data?.error || 'Failed to create exam');
         }
@@ -159,6 +161,42 @@ export default function ReportCards() {
         }
     };
 
+    const handlePublish = async (studentId, isPublished) => {
+        try {
+            await api.post('/reports/publish', { studentId, isPublished });
+            toast.success(`Certificate ${isPublished ? 'published' : 'hidden'} successfully!`);
+            fetchStudents(); // Refresh results to show new status
+        } catch (error) {
+            toast.error('Failed to update publication status');
+        }
+    };
+
+    const handlePublishAll = async (isPublished) => {
+        if (!selectedClass) return;
+        if (!window.confirm(`Are you sure you want to ${isPublished ? 'publish' : 'hide'} all certificates for this course?`)) return;
+
+        try {
+            await api.post('/reports/publish/course', { courseId: selectedClass, isPublished });
+            toast.success(`All certificates ${isPublished ? 'published' : 'hidden'} successfully!`);
+            fetchStudents();
+        } catch (error) {
+            toast.error('Failed to update publication status');
+        }
+    };
+
+    const handleMarkAllAlumni = async () => {
+        if (!selectedClass) return;
+        if (!window.confirm('Are you sure you want to mark ALL students in this course as Alumni? This should only be done after the course is fully completed.')) return;
+
+        try {
+            await api.patch(`/students/bulk-status/course/${selectedClass}`, { status: 'ALUMNI' });
+            toast.success('Successfully marked all students as alumni');
+            fetchStudents();
+        } catch (error) {
+            toast.error('Failed to update students');
+        }
+    };
+
     const generateReportCard = async () => {
         if (!selectedStudent || !selectedExam) {
             toast.error('Please select both student and exam');
@@ -196,11 +234,11 @@ export default function ReportCards() {
 
     return (
         <div className="fade-in">
-            <Breadcrumb items={[{ label: 'Report Cards' }]} />
+            <Breadcrumb items={[{ label: 'Certificates' }]} />
 
             <div className="mb-6">
-                <h1 className="text-3xl font-bold text-gray-800 mb-2">Report Card Management</h1>
-                <p className="text-gray-600">Manage exams, enter marks, and generate report cards</p>
+                <h1 className="text-3xl font-bold text-gray-800 mb-2">Certificate Management</h1>
+                <p className="text-gray-600">Manage assessments, enter marks, and publish certificates</p>
             </div>
 
             {/* Tabs */}
@@ -208,8 +246,8 @@ export default function ReportCards() {
                 <button
                     onClick={() => setActiveTab('exams')}
                     className={`px-6 py-3 font-medium transition-all ${activeTab === 'exams'
-                            ? 'border-b-2 border-primary-600 text-primary-600'
-                            : 'text-gray-600 hover:text-gray-800'
+                        ? 'border-b-2 border-primary-600 text-primary-600'
+                        : 'text-gray-600 hover:text-gray-800'
                         }`}
                 >
                     <MdAssessment className="inline mr-2" />
@@ -218,8 +256,8 @@ export default function ReportCards() {
                 <button
                     onClick={() => setActiveTab('enter-marks')}
                     className={`px-6 py-3 font-medium transition-all ${activeTab === 'enter-marks'
-                            ? 'border-b-2 border-primary-600 text-primary-600'
-                            : 'text-gray-600 hover:text-gray-800'
+                        ? 'border-b-2 border-primary-600 text-primary-600'
+                        : 'text-gray-600 hover:text-gray-800'
                         }`}
                 >
                     <MdEdit className="inline mr-2" />
@@ -228,12 +266,12 @@ export default function ReportCards() {
                 <button
                     onClick={() => setActiveTab('generate')}
                     className={`px-6 py-3 font-medium transition-all ${activeTab === 'generate'
-                            ? 'border-b-2 border-primary-600 text-primary-600'
-                            : 'text-gray-600 hover:text-gray-800'
+                        ? 'border-b-2 border-primary-600 text-primary-600'
+                        : 'text-gray-600 hover:text-gray-800'
                         }`}
                 >
                     <MdFileDownload className="inline mr-2" />
-                    Generate Reports
+                    Publish & Generate
                 </button>
             </div>
 
@@ -242,16 +280,16 @@ export default function ReportCards() {
                 <div>
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Select Class</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Select Course</label>
                             <select
                                 value={selectedClass}
                                 onChange={(e) => setSelectedClass(e.target.value)}
                                 className="input-field w-64"
                             >
-                                <option value="">Select Class</option>
+                                <option value="">Select Course</option>
                                 {classes.map(cls => (
                                     <option key={cls.id} value={cls.id}>
-                                        {cls.class_name}-{cls.section}
+                                        {cls.class_name}
                                     </option>
                                 ))}
                             </select>
@@ -279,6 +317,7 @@ export default function ReportCards() {
                                                     Date: {new Date(exam.exam_date).toLocaleDateString()}
                                                 </p>
                                             )}
+                                            <p className="text-sm font-bold text-primary-600 mt-1">Weightage: {exam.weightage}%</p>
                                         </div>
                                         <button
                                             onClick={() => handleDeleteExam(exam.id)}
@@ -312,10 +351,10 @@ export default function ReportCards() {
                                 }}
                                 className="input-field"
                             >
-                                <option value="">Select Class</option>
+                                <option value="">Select Course</option>
                                 {classes.map(cls => (
                                     <option key={cls.id} value={cls.id}>
-                                        {cls.class_name}-{cls.section}
+                                        {cls.class_name}
                                     </option>
                                 ))}
                             </select>
@@ -407,108 +446,127 @@ export default function ReportCards() {
                     {(!selectedClass || !selectedExam) && (
                         <div className="card p-12 text-center">
                             <MdAssessment size={64} className="mx-auto text-gray-300 mb-4" />
-                            <p className="text-gray-600">Select a class and exam to start entering marks</p>
+                            <p className="text-gray-600">Select a course and assessment to start entering marks</p>
                         </div>
                     )}
                 </div>
             )}
 
             {activeTab === 'generate' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="card p-6">
-                        <h2 className="text-xl font-bold text-gray-800 mb-4">Generate Report Card</h2>
-
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Select Class</label>
-                                <select
-                                    value={selectedClass}
-                                    onChange={(e) => {
-                                        setSelectedClass(e.target.value);
-                                        setSelectedExam('');
-                                        setSelectedStudent('');
-                                    }}
-                                    className="input-field"
-                                >
-                                    <option value="">Select Class</option>
-                                    {classes.map(cls => (
-                                        <option key={cls.id} value={cls.id}>
-                                            {cls.class_name}-{cls.section}
-                                        </option>
-                                    ))}
-                                </select>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-4">
+                        <div className="card p-6">
+                            <h2 className="text-xl font-bold text-gray-800 mb-4">Course & Assessment Selection</h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Course</label>
+                                    <select
+                                        value={selectedClass}
+                                        onChange={(e) => {
+                                            setSelectedClass(e.target.value);
+                                            setSelectedExam('');
+                                            setSelectedStudent('');
+                                        }}
+                                        className="input-field"
+                                    >
+                                        <option value="">Select Course</option>
+                                        {classes.map(cls => (
+                                            <option key={cls.id} value={cls.id}>{cls.class_name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Assessment</label>
+                                    <select
+                                        value={selectedExam}
+                                        onChange={(e) => setSelectedExam(e.target.value)}
+                                        className="input-field"
+                                        disabled={!selectedClass}
+                                    >
+                                        <option value="">Select Assessment</option>
+                                        {exams.map(exam => (
+                                            <option key={exam.id} value={exam.id}>{exam.exam_name}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Select Exam</label>
-                                <select
-                                    value={selectedExam}
-                                    onChange={(e) => setSelectedExam(e.target.value)}
-                                    className="input-field"
-                                    disabled={!selectedClass}
-                                >
-                                    <option value="">Select Exam</option>
-                                    {exams.map(exam => (
-                                        <option key={exam.id} value={exam.id}>
-                                            {exam.exam_name} ({exam.academic_year})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Select Student</label>
-                                <select
-                                    value={selectedStudent}
-                                    onChange={(e) => setSelectedStudent(e.target.value)}
-                                    className="input-field"
-                                    disabled={!selectedClass}
-                                >
-                                    <option value="">Select Student</option>
-                                    {students.map(student => (
-                                        <option key={student.id} value={student.id}>
-                                            {student.full_name} (Roll: {student.roll_number})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <button
-                                onClick={generateReportCard}
-                                disabled={loading || !selectedStudent || !selectedExam}
-                                className="w-full btn btn-success btn-lg"
-                            >
-                                {loading ? 'Generating...' : (
-                                    <>
-                                        <MdFileDownload size={20} />
-                                        Generate Report Card
-                                    </>
-                                )}
-                            </button>
+                            {selectedClass && (
+                                <div className="mt-4 flex gap-3">
+                                    <button
+                                        onClick={() => handlePublishAll(true)}
+                                        className="btn bg-green-600 text-white hover:bg-green-700"
+                                    >
+                                        <MdPublish size={20} />
+                                        Publish All
+                                    </button>
+                                    <button
+                                        onClick={() => handlePublishAll(false)}
+                                        className="btn bg-gray-600 text-white hover:bg-gray-700"
+                                    >
+                                        <MdUnpublished size={20} />
+                                        Hide All
+                                    </button>
+                                    <button
+                                        onClick={handleMarkAllAlumni}
+                                        className="btn bg-amber-600 text-white hover:bg-amber-700"
+                                    >
+                                        Mark all as Alumni
+                                    </button>
+                                </div>
+                            )}
                         </div>
+
+                        {selectedClass && selectedExam && (
+                            <div className="card p-6">
+                                <h2 className="text-xl font-bold text-gray-800 mb-4">Student Certificates</h2>
+                                <div className="space-y-3">
+                                    {students.map(student => (
+                                        <div key={student.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-gray-50 transition">
+                                            <div>
+                                                <p className="font-bold text-gray-800">{student.full_name}</p>
+                                                <p className="text-xs text-gray-500">Adm: {student.admission_number}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={() => handlePublish(student.id, !student.is_published)}
+                                                    className={`btn p-2 rounded-lg transition-all ${student.is_published ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                                                    title={student.is_published ? "Unpublish" : "Publish"}
+                                                >
+                                                    {student.is_published ? <MdPublish size={20} /> : <MdUnpublished size={20} />}
+                                                    <span className="text-xs font-bold ml-1">{student.is_published ? 'Published' : 'Hidden'}</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedStudent(student.id);
+                                                        generateReportCard();
+                                                    }}
+                                                    className="btn btn-secondary py-2"
+                                                >
+                                                    <MdFileDownload size={18} />
+                                                    Download
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    <div className="card p-6 bg-gradient-to-br from-green-500 to-teal-500 text-white">
-                        <h2 className="text-xl font-bold mb-4">Report Card Information</h2>
-                        <ul className="space-y-2 text-sm">
-                            <li>✓ Subject-wise marks display</li>
-                            <li>✓ Total marks and percentage calculation</li>
-                            <li>✓ Automatic grade assignment</li>
-                            <li>✓ Professional PDF format</li>
-                            <li>✓ Ready for printing and distribution</li>
-                            <li>✓ Includes student and exam details</li>
-                        </ul>
-
-                        <div className="mt-6 p-4 bg-white/20 rounded-lg">
-                            <div className="text-sm font-medium mb-2">Grade Scale:</div>
-                            <div className="text-xs space-y-1">
-                                <div>A+: 90% and above</div>
-                                <div>A: 80-89%</div>
-                                <div>B+: 70-79%</div>
-                                <div>B: 60-69%</div>
-                                <div>C: 50-59%</div>
-                                <div>D: 40-49%</div>
-                                <div>F: Below 40%</div>
+                    <div className="lg:col-span-1">
+                        <div className="card p-6 bg-gradient-to-br from-blue-600 to-indigo-700 text-white">
+                            <h2 className="text-xl font-bold mb-4">Certificate Info</h2>
+                            <ul className="space-y-3 text-sm opacity-90">
+                                <li className="flex items-center gap-2"><MdSave /> Data-driven certificates</li>
+                                <li className="flex items-center gap-2"><MdSave /> Professional ASDC Layout</li>
+                                <li className="flex items-center gap-2"><MdSave /> Grade-based evaluation</li>
+                                <li className="flex items-center gap-2"><MdSave /> Direct Student Access</li>
+                            </ul>
+                            <div className="mt-6 p-4 bg-white/10 rounded-xl">
+                                <p className="text-xs font-medium mb-3">Publishing Guide:</p>
+                                <p className="text-xs leading-relaxed opacity-80">
+                                    Clicking <b>Publish</b> makes the certificate instantly available on the Student's Dashboard. Hidden certificates cannot be viewed or downloaded by students.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -557,6 +615,21 @@ export default function ReportCards() {
                                         onChange={(e) => setExamFormData({ ...examFormData, examDate: e.target.value })}
                                         className="input-field"
                                     />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Weightage (%)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        value={examFormData.weightage}
+                                        onChange={(e) => setExamFormData({ ...examFormData, weightage: e.target.value })}
+                                        className="input-field"
+                                        placeholder="e.g., 20"
+                                        required
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Total weightage for all exams in a course must be 100%.</p>
                                 </div>
                             </div>
 

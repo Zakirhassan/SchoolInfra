@@ -23,7 +23,7 @@ const photoStorage = multer.diskStorage({
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'student-' + uniqueSuffix + path.extname(file.originalname));
+        cb(null, 'photo-' + uniqueSuffix + path.extname(file.originalname));
     }
 });
 
@@ -67,6 +67,34 @@ const excelFilter = (req, file, cb) => {
     }
 };
 
+// Configure storage for student documents
+const documentStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const docsDir = path.join(uploadDir, 'documents');
+        if (!fs.existsSync(docsDir)) {
+            fs.mkdirSync(docsDir, { recursive: true });
+        }
+        cb(null, docsDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'doc-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+// File filter for documents
+const documentFilter = (req, file, cb) => {
+    const allowedTypes = /pdf|jpeg|jpg|png/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+
+    if (mimetype || extname) {
+        return cb(null, true);
+    } else {
+        cb(new Error('Only PDF, JPEG, JPG, and PNG files are allowed'));
+    }
+};
+
 // Multer upload configurations
 export const uploadPhoto = multer({
     storage: photoStorage,
@@ -78,4 +106,10 @@ export const uploadExcel = multer({
     storage: excelStorage,
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
     fileFilter: excelFilter
+});
+
+export const uploadDocument = multer({
+    storage: documentStorage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: documentFilter
 });

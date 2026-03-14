@@ -73,10 +73,10 @@ VITE v5.x.x  ready in xxx ms
 ### Port 5000 already in use
 ```bash
 # Change PORT in backend/.env
-PORT=5001
+PORT=5000
 
 # Update frontend/vite.config.js proxy target
-target: 'http://localhost:5001'
+target: 'http://localhost:5000'
 ```
 
 ### Database connection refused

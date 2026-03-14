@@ -8,26 +8,50 @@ const router = express.Router();
 // Login
 router.post('/login', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, password, role } = req.body; // role is optional, can be inferred but let's try to handle all
 
         if (!username || !password) {
-            return res.status(400).json({ error: 'Username and password are required' });
+            return res.status(400).json({ error: 'Username/Email and password are required' });
         }
 
-        // Find admin by username
-        const result = await pool.query(
-            'SELECT * FROM admins WHERE username = $1',
-            [username]
-        );
+        let user = null;
+        let userRole = null;
 
-        if (result.rows.length === 0) {
+        // 1. Try Admin (username)
+        const adminResult = await pool.query('SELECT * FROM admins WHERE username = $1', [username]);
+        if (adminResult.rows.length > 0) {
+            user = adminResult.rows[0];
+            userRole = 'ADMIN';
+        }
+
+        // 2. Try Teacher if not Admin
+        if (!user) {
+            const teacherResult = await pool.query('SELECT * FROM teachers WHERE username = $1 OR email = $1', [username]);
+            if (teacherResult.rows.length > 0) {
+                user = teacherResult.rows[0];
+                userRole = 'TEACHER';
+            }
+        }
+
+        // 3. Try Student if not Admin or Teacher
+        if (!user) {
+            const studentResult = await pool.query('SELECT * FROM students WHERE email = $1', [username]);
+            if (studentResult.rows.length > 0) {
+                user = studentResult.rows[0];
+                userRole = 'STUDENT';
+                // Block alumni students from logging in
+                if (user.status === 'ALUMNI') {
+                    return res.status(403).json({ error: 'Alumni accounts cannot log in to the student portal. Please contact the administrator.' });
+                }
+            }
+        }
+
+        if (!user || !user.password_hash) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        const admin = result.rows[0];
-
         // Verify password
-        const isValidPassword = await bcrypt.compare(password, admin.password_hash);
+        const isValidPassword = await bcrypt.compare(password, user.password_hash);
 
         if (!isValidPassword) {
             return res.status(401).json({ error: 'Invalid credentials' });
@@ -35,18 +59,19 @@ router.post('/login', async (req, res) => {
 
         // Generate JWT token
         const token = generateToken({
-            id: admin.id,
-            username: admin.username,
-            role: 'ADMIN'
+            id: user.id,
+            username: user.username || user.email,
+            role: userRole
         });
 
         res.json({
             message: 'Login successful',
             token,
             user: {
-                id: admin.id,
-                username: admin.username,
-                fullName: admin.full_name
+                id: user.id,
+                username: user.username || user.email,
+                fullName: user.full_name,
+                role: userRole
             }
         });
     } catch (error) {
