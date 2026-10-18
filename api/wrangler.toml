@@ -1,0 +1,11 @@
+name = "asdc-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "asdc-files"
+
+[observability]
+enabled = true
