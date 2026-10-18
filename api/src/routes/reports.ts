@@ -78,7 +78,9 @@ r.get('/student/:studentId/exam/:examId', authenticate, async (c) => {
       return c.json({ error: 'No marks found for this student and exam' }, 404);
     }
 
-    return c.json({ student, marks: marksResult.rows, exam, schoolInfo: schoolInfo(c.env) });
+    // As JSON, s.* would also hand out password_hash; the certificate never used it.
+    const { password_hash, ...studentData } = student;
+    return c.json({ student: studentData, marks: marksResult.rows, exam, schoolInfo: schoolInfo(c.env) });
   } catch (error) {
     console.error('Generate certificate error:', error);
     return c.json({ error: 'Failed to generate certificate' }, 500);

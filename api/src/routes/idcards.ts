@@ -5,6 +5,9 @@ import { readBody } from '../lib/body';
 
 const r = new Hono<AppCtx>();
 
+// The old route turned s.* into a PDF; as JSON it would also hand out password_hash. The PDF never used it.
+const withoutHash = ({ password_hash, ...s }: any) => s;
+
 // Same defaults as backend/routes/idcards.js (process.env -> Worker vars).
 const schoolInfo = (env: Env) => ({
   name: env.SCHOOL_NAME || 'ABC School',
@@ -32,7 +35,7 @@ r.get('/student/:id', authenticate, async (c) => {
       return c.json({ error: 'Student not found' }, 404);
     }
 
-    const student = result.rows[0];
+    const student = withoutHash(result.rows[0]);
     return c.json({ student, schoolInfo: schoolInfo(c.env) });
   } catch (error) {
     console.error('Generate ID card error:', error);
@@ -72,7 +75,7 @@ r.post('/bulk', authenticate, async (c) => {
       return c.json({ error: 'No students found' }, 404);
     }
 
-    return c.json({ students: result.rows, schoolInfo: schoolInfo(c.env) });
+    return c.json({ students: result.rows.map(withoutHash), schoolInfo: schoolInfo(c.env) });
   } catch (error) {
     console.error('Generate bulk ID cards error:', error);
     return c.json({ error: 'Failed to generate ID cards' }, 500);
