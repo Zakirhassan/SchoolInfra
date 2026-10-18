@@ -1,3 +1,4 @@
+import { ALLOWED_TYPES } from './lib/uploads';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { AppCtx } from './types';
@@ -21,7 +22,12 @@ app.get('/health', (c) => c.json({ status: 'OK', message: 'School Management Sys
 app.get('/uploads/*', async (c) => {
   const obj = await c.env.FILES.get(c.req.path.replace(/^\/uploads\//, ''));
   if (!obj) return c.json({ error: 'Route not found' }, 404);
-  return new Response(obj.body, { headers: { 'content-type': obj.httpMetadata?.contentType ?? 'application/octet-stream' } });
+  const stored = obj.httpMetadata?.contentType;
+  return new Response(obj.body, { headers: {
+    'content-type': stored && ALLOWED_TYPES.has(stored) ? stored : 'application/octet-stream',
+    'x-content-type-options': 'nosniff',
+    'cache-control': 'public, max-age=86400',
+  } });
 });
 
 app.use('/api/*', withDb);
