@@ -31,3 +31,4 @@ backend/uploads/*
 # Database
 *.db
 *.sqlite
+.superpowers/
