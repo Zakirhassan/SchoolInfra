@@ -1,0 +1,19 @@
+name: files-backup
+on:
+  schedule: [{ cron: '47 21 * * *' }]
+  workflow_dispatch:
+jobs:
+  files:
+    runs-on: ubuntu-latest
+    env:
+      RCLONE_CONFIG_R2_TYPE: s3
+      RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+      RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      RCLONE_CONFIG_B2_TYPE: b2
+      RCLONE_CONFIG_B2_ACCOUNT: ${{ secrets.B2_KEY_ID }}
+      RCLONE_CONFIG_B2_KEY: ${{ secrets.B2_APP_KEY }}
+    steps:
+      - run: sudo apt-get update && sudo apt-get install -y rclone
+      - run: rclone copy R2:asdc-files B2:asdc-backups-b2/files --checksum
