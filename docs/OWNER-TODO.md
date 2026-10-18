@@ -47,7 +47,7 @@ GitHub -> Actions -> select the workflow -> Run workflow.
 Needs a deployed (or `wrangler dev`) Worker with a real database, and the frontend pointed at it (`VITE_API_URL`). The frontend now only works against the new JSON endpoints, not the old Express backend.
 
 1. **Sample template:** Students -> Download Template. Open it in Excel (one row, John Doe). Pick a class, Upload Template with that file unchanged: expect "Successfully uploaded 1 students!".
-2. **200-row file:** fill the template with 200 rows (unique `admission_number`s) and upload: expect "Successfully uploaded 200 students!" and no Worker CPU-limit error in `wrangler tail`.
+2. **200-row file:** fill the template with 200 rows (unique `admission_number`s) and upload: expect "Successfully uploaded 200 students!" and no Worker CPU-limit error in `wrangler tail`. Also CPU-test an attendance upload (~50 rows) and a bulk-update (API, ~200 rows) the same way. If any fail on the free plan, follow-up task (not implemented): replace per-row queries with one multi-row INSERT/UPDATE via `unnest` in `api/src/routes/students.ts` bulk loops, `studentRows.ts` and `attendance.ts`.
 3. **Bad file:** duplicate an admission number, set a gender to `M`, blank a `full_name`: expect the toast "Upload failed with N error(s)" listing e.g. `Row 3: Duplicate admission number ...`, `Row 3: Invalid gender. Must be Male, Female, or Other`, `Row 4: Missing full_name` (same text as the old backend). Upload the same good file twice: expect "Duplicate admission numbers found in database".
 4. **Attendance:** Attendance -> pick a course -> Template -> Upload Excel with it: expect "Successfully uploaded attendance for N students".
 5. **Export:** Export -> Export to Excel (no filters, then with a filter that matches nothing). Open `students_export.xlsx` in Excel: Date of Birth must be a real date showing the right day. The empty filter should now say "No students found matching the criteria" (before, the blob response hid that message).
@@ -108,7 +108,7 @@ The `files-backup` workflow and `docs/RUNBOOK.md` are done. Do steps 1-3 before 
 
 Nothing below could be run in the build session (needs your accounts, secrets or live databases).
 
-1. [ ] **BLOCKING - Task 1 CPU spike gate.** Never run. `bcryptjs` likely exceeds the free plan's 10 ms CPU limit per request, which would make login fail in production. Password hashing is isolated in `api/src/lib/password.ts`. Run the spike per the plan; if it fails choose (a) Workers Paid, $5/month (needs your approval; breaks the $0 target), or (b) PBKDF2 plus a forced password reset for all users (needs an extra password-migration task; old bcrypt hashes could not be verified).
+1. [ ] **BLOCKING - Task 1 CPU spike gate.** Never run. `bcryptjs` likely exceeds the free plan's 10 ms CPU limit per request, which would make login fail in production. Password hashing is isolated in `api/src/lib/password.ts`. Run the spike per the plan, and also CPU-test bulk upload (200 rows), attendance upload (~50 rows) and bulk-update (see Task 9; remedy is one multi-row INSERT/UPDATE via `unnest` instead of per-row queries, a follow-up task); if it fails choose (a) Workers Paid, $5/month (needs your approval; breaks the $0 target), or (b) PBKDF2 plus a forced password reset for all users (needs an extra password-migration task; old bcrypt hashes could not be verified).
 2. [ ] **Parity runs** (old backend vs new Worker, same database). From `api/`, with real ids substituted:
    ```bash
    U=admin P=<password> \
@@ -121,7 +121,7 @@ Nothing below could be run in the build session (needs your accounts, secrets or
 5. [ ] **PDF real-file checks:** Task 10 section above.
 6. [ ] **Uploads:** Task 8 file migration and browser test, above.
 7. [ ] **Deploy smoke test and monitoring:** Task 12 steps 4-5, above.
-8. [ ] **Backups green:** Backups section 3, plus the restore drill (Task 13 step 3).
+8. [ ] **Backups green:** (note: `restore-test` may go red while `DATABASE_URL_DIRECT` still points at Supabase, because of Supabase-specific roles/policies; re-check after the Task 4 switch to Neon.) Backups section 3, plus the restore drill (Task 13 step 3).
 
 ## Security notes found during port (existing behaviour, not fixed)
 

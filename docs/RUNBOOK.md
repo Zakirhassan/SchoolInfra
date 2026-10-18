@@ -42,13 +42,22 @@ Needs: `age`, `rclone`, `pg_restore` (v17) and the age PRIVATE key file (see bel
    rclone copyto "R2:asdc-backups/daily/$LATEST" backup.age
    ```
    For an older point, list `rclone lsf R2:asdc-backups/daily/` (or `weekly/`) and pick a name.
-3. Decrypt and restore into the Neon DIRECT connection string:
+3. Decrypt and sanity-check:
    ```bash
    age -d -i key.txt -o x.dump backup.age
-   pg_restore --list x.dump > /dev/null            # sanity check
-   pg_restore -d "<neon direct url>" --clean --if-exists x.dump
+   pg_restore --list x.dump > /dev/null
    ```
-4. Check: log in, open Students, compare counts. If you restored into a branch, point `DATABASE_URL` (that branch's pooled string) at it with `wrangler secret put DATABASE_URL`, then switch back afterwards.
+4. Restore. Prefer (a).
+   - **(a) Into a NEW Neon branch (safe, preferred).** Create a branch from production in the Neon console, then:
+     ```bash
+     pg_restore -d "<new branch direct url>" --clean --if-exists x.dump
+     ```
+     Check: point `DATABASE_URL` (that branch's pooled string) at it with `wrangler secret put DATABASE_URL`, log in, open Students, compare counts. Switch back afterwards, or keep the branch if it is the one you want.
+   - **(b) Over production. **DROPS PRODUCTION TABLES.** ** First take a Neon branch/snapshot of production so you can undo this. Then:
+     ```bash
+     pg_restore -d "<production direct url>" --clean --if-exists --single-transaction --exit-on-error x.dump
+     ```
+     Any error aborts and rolls back the whole restore. Check by logging in and comparing counts.
 
 ## Restore uploaded files
 
@@ -72,9 +81,11 @@ The private key (file `asdc-backup.key`, starts `AGE-SECRET-KEY-`) decrypts ever
 
 Render + Supabase still hold the pre-cut-over data, so anything entered on the new system since then will be missing; export or note it first.
 
+The new frontend sends JSON rows (Excel/attendance) and expects JSON PDF data (ID cards/certificates), so pointing `VITE_API_URL` at Render with the new frontend does NOT work. The Worker and the new frontend must be rolled back together.
+
 1. Render dashboard: make sure the old service is running (open its `/health` to wake it).
-2. In Cloudflare Pages set `VITE_API_URL=https://<render-service>.onrender.com/api` and redeploy (it is baked in at build time). The old backend's `FRONTEND_URL`/CORS must allow `https://app.asdczrm.com`.
-3. Tell users to log in again. To go forward again, reverse step 2.
+2. Redeploy the pre-migration frontend on Cloudflare Pages: either build git commit `ed25c22`, or use Pages "rollback to previous deployment" on a deployment from before the merge. Set `VITE_API_URL=https://<render-service>.onrender.com/api` for that build (baked in at build time). The old backend's `FRONTEND_URL`/CORS must allow `https://app.asdczrm.com`.
+3. Tell users to log in again. To go forward again, redeploy the new frontend with the Worker API URL.
 
 ## Rotate JWT_SECRET
 
@@ -91,5 +102,7 @@ Everyone is logged out and must sign in again; nothing else changes.
 - **UptimeRobot: API down**: check Cloudflare status and Workers, `asdc-api`, Logs; then `curl https://api.asdczrm.com/health`. If caused by a bad deploy, redeploy the previous commit. If Neon, check the Neon console.
 - **UptimeRobot: website down**: Cloudflare Pages, Deployments; roll back to the last good deployment.
 - **Users report login/CORS errors**: `FRONTEND_URL` must equal `https://app.asdczrm.com` exactly; `VITE_API_URL` must be the API URL.
+- **Alert channels**: only `db-backup` pings Healthchecks. A red `restore-test` or `files-backup` only emails you via GitHub, so watch your email.
+- **Scheduled workflows stop**: on public repos GitHub disables scheduled workflows after 60 days without repo activity; re-enable them in the Actions tab or push a commit.
 - **`restore-test` red**: treat backups as broken until fixed; run `db-backup` again and re-check.
-- **Data deleted or corrupted**: stop edits, restore into a NEW Neon branch, verify, then switch `DATABASE_URL` or restore over production.
+- **Data deleted or corrupted**: stop edits, restore into a NEW Neon branch, verify, then switch `DATABASE_URL`, or restore over production (restore option (b) above; it drops tables).
