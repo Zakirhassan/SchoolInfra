@@ -41,3 +41,14 @@ GitHub -> Actions -> select the workflow -> Run workflow.
 1. **Parity runs** (once the Worker is deployed/`wrangler dev` and the old backend is reachable): run the parity script against `/api/students`, `/api/students/<id>` (pick a real student id) and `/api/teachers`. Expect identical JSON.
 2. **Migrate existing files from Render (plan Step 4):** Render free disks are wiped on redeploy, so many `/uploads/...` rows may already be dead links. For each `photo_url` / `document_url` that still resolves on the old Render service: `curl -O <url>` then `npx wrangler r2 object put asdc-files/<folder>/<name> --file <name>` (folder is `photos` or `documents`). Log dead links in the migration log; those users must re-upload.
 3. **Browser test (plan Step 5):** create a student with a photo (image should display via `/uploads/photos/...`); upload and delete a document; confirm the object appears/disappears in the R2 dashboard.
+
+## Task 9: Excel in the browser
+
+Needs a deployed (or `wrangler dev`) Worker with a real database, and the frontend pointed at it (`VITE_API_URL`). The frontend now only works against the new JSON endpoints, not the old Express backend.
+
+1. **Sample template:** Students -> Download Template. Open it in Excel (one row, John Doe). Pick a class, Upload Template with that file unchanged: expect "Successfully uploaded 1 students!".
+2. **200-row file:** fill the template with 200 rows (unique `admission_number`s) and upload: expect "Successfully uploaded 200 students!" and no Worker CPU-limit error in `wrangler tail`.
+3. **Bad file:** duplicate an admission number, set a gender to `M`, blank a `full_name`: expect the toast "Upload failed with N error(s)" listing e.g. `Row 3: Duplicate admission number ...`, `Row 3: Invalid gender. Must be Male, Female, or Other`, `Row 4: Missing full_name` (same text as the old backend). Upload the same good file twice: expect "Duplicate admission numbers found in database".
+4. **Attendance:** Attendance -> pick a course -> Template -> Upload Excel with it: expect "Successfully uploaded attendance for N students".
+5. **Export:** Export -> Export to Excel (no filters, then with a filter that matches nothing). Open `students_export.xlsx` in Excel: Date of Birth must be a real date showing the right day. The empty filter should now say "No students found matching the criteria" (before, the blob response hid that message).
+6. **Bulk update (API only; no button in the UI):** `GET /api/students/update-template/<classId>` returns JSON rows now; `POST /api/students/bulk-update` takes `{ classId, rows }`. Optional: smoke-test with curl.
