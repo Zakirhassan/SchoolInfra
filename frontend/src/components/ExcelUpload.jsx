@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { MdCloudUpload, MdCheckCircle, MdError } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
+import { readRows } from '../lib/excel/parseStudents';
 
 export default function ExcelUpload({ classId, onSuccess, mode = 'create' }) {
     const [dragActive, setDragActive] = useState(false);
@@ -52,23 +53,27 @@ export default function ExcelUpload({ classId, onSuccess, mode = 'create' }) {
         setUploading(true);
         setUploadProgress(0);
 
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('classId', classId);
-
+        let progressInterval;
         try {
             // Simulate progress
-            const progressInterval = setInterval(() => {
+            progressInterval = setInterval(() => {
                 setUploadProgress(prev => Math.min(prev + 10, 90));
             }, 200);
 
+            // Read the workbook in the browser; the API only receives JSON rows.
+            let rows;
+            try {
+                rows = await readRows(file);
+            } catch (readError) {
+                // Same feedback the server gave when it could not read the file
+                throw mode === 'update'
+                    ? { response: { data: { error: 'Failed to update students' } } }
+                    : { response: { data: { error: 'Validation failed', details: [readError.message] } } };
+            }
+
             // Use different endpoint based on mode
             const endpoint = mode === 'update' ? '/students/bulk-update' : '/students/bulk-upload';
-            const response = await api.post(endpoint, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
+            const response = await api.post(endpoint, { classId, rows });
 
             clearInterval(progressInterval);
             setUploadProgress(100);
@@ -94,6 +99,7 @@ export default function ExcelUpload({ classId, onSuccess, mode = 'create' }) {
             }, 1500);
 
         } catch (error) {
+            clearInterval(progressInterval);
             setUploading(false);
             setUploadProgress(0);
 

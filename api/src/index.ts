@@ -9,6 +9,8 @@ import subjects from './routes/subjects';
 import classes from './routes/classes';
 import students from './routes/students';
 import teachers from './routes/teachers';
+import exportRoutes from './routes/export';
+import attendance from './routes/attendance';
 
 const app = new Hono<AppCtx>();
 app.use('*', (c, next) => cors({ origin: c.env.FRONTEND_URL || '*', credentials: true })(c, next));
@@ -27,6 +29,8 @@ app.route('/api/fees', fees);
 app.route('/api/subjects', subjects);
 app.route('/api/classes', classes);
 app.route('/api/students', students);
+app.route('/api/export', exportRoutes);
+app.route('/api/attendance', attendance);
 app.route('/api/teachers', teachers);
 
 app.notFound((c) => c.json({ error: 'Route not found' }, 404));

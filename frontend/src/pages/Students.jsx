@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import api from '../api/axios';
 import Breadcrumb from '../components/Breadcrumb';
 import ExcelUpload from '../components/ExcelUpload';
+import { downloadSampleTemplate } from '../lib/excel/parseStudents';
 
 export default function Students() {
     const [students, setStudents] = useState([]);
@@ -15,6 +16,7 @@ export default function Students() {
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [showUploadModal, setShowUploadModal] = useState(false);
+    const [uploadMode, setUploadMode] = useState('create'); // was referenced but never declared
     const [showDocsModal, setShowDocsModal] = useState(false);
     const [viewDocUrl, setViewDocUrl] = useState(null);
     const [selectedStudent, setSelectedStudent] = useState(null);
@@ -148,39 +150,12 @@ export default function Students() {
         setPhoto(null);
     };
 
-    const downloadTemplate = async () => {
+    // Simplified: Just one download function for blank template (built in the browser)
+    const downloadBlankTemplate = () => {
         try {
-            const response = await api.get('/students/template/download', {
-                responseType: 'blob'
-            });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', 'student_upload_template.xlsx');
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+            downloadSampleTemplate();
             toast.success('Template downloaded successfully!');
-        } catch (error) {
-            toast.error('Failed to download template');
-        }
-    };
-
-    // Simplified: Just one download function for blank template
-    const downloadBlankTemplate = async () => {
-        try {
-            const response = await api.get('/students/template/download', {
-                responseType: 'blob'
-            });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', 'student_upload_template.xlsx');
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            toast.success('Template downloaded successfully!');
-        } catch (error) {
+        } catch {
             toast.error('Failed to download template');
         }
     };

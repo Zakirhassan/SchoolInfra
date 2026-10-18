@@ -3,7 +3,7 @@ import { MdCloudUpload, MdFileDownload, MdEventAvailable } from 'react-icons/md'
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import Breadcrumb from '../components/Breadcrumb';
-import * as XLSX from 'xlsx';
+import { readRows, downloadAttendanceTemplate } from '../lib/excel/attendance';
 
 export default function Attendance() {
     const [courses, setCourses] = useState([]);
@@ -51,16 +51,7 @@ export default function Attendance() {
         }
 
         // Generate template with current students in the course
-        const studentInfo = attendanceData.map(s => ({
-            'Admission Number': s.admission_number,
-            'Student Name': s.full_name,
-            'Status': 'Present' // Default status
-        }));
-
-        const ws = XLSX.utils.json_to_sheet(studentInfo);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
-        XLSX.writeFile(wb, `Attendance_Template_${selectedDate}.xlsx`);
+        downloadAttendanceTemplate(attendanceData, selectedDate);
         toast.success('Template downloaded');
     };
 
@@ -71,15 +62,20 @@ export default function Attendance() {
             return;
         }
 
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('courseId', selectedCourse);
-        formData.append('date', selectedDate);
-
         setUploading(true);
         try {
-            const response = await api.post('/attendance/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+            // Read the workbook in the browser; the API only receives JSON rows.
+            let rows;
+            try {
+                rows = await readRows(file);
+            } catch {
+                // Same message the server gave when it could not read the file
+                throw { response: { data: { error: 'Failed to upload attendance' } } };
+            }
+            const response = await api.post('/attendance/upload', {
+                courseId: selectedCourse,
+                date: selectedDate,
+                rows
             });
             toast.success(response.data.message);
             fetchAttendanceStats();
