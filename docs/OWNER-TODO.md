@@ -52,3 +52,15 @@ Needs a deployed (or `wrangler dev`) Worker with a real database, and the fronte
 4. **Attendance:** Attendance -> pick a course -> Template -> Upload Excel with it: expect "Successfully uploaded attendance for N students".
 5. **Export:** Export -> Export to Excel (no filters, then with a filter that matches nothing). Open `students_export.xlsx` in Excel: Date of Birth must be a real date showing the right day. The empty filter should now say "No students found matching the criteria" (before, the blob response hid that message).
 6. **Bulk update (API only; no button in the UI):** `GET /api/students/update-template/<classId>` returns JSON rows now; `POST /api/students/bulk-update` takes `{ classId, rows }`. Optional: smoke-test with curl.
+
+## Task 10: PDFs in the browser (visual check, plan Step 3)
+
+Needs the old stack (Express backend + its frontend) and the new stack (Worker + this frontend) pointed at the **same database**, and one student who has a photo (in R2 for the new stack and on disk for the old one), marks for an exam, and `is_published = true`.
+
+1. **Single ID card:** as that student, Dashboard -> Download ID Card on both stacks. Open the two PDFs side by side: same page size, every text field at the same spot after the labels, photo inside the rounded box. Dates must match (D.O.B. as DD/MM/YYYY).
+2. **Bulk ID cards:** as admin, ID Cards -> pick that student's course -> Generate on both stacks. Same page count and order. A student whose photo is missing should get a card with an empty photo box, not an error.
+3. **Certificate:** as admin, Certificates -> Generate tab -> same student + exam on both stacks; also download it as the student from the dashboard. Compare the name, course, from/to dates, grade and Student ID positions.
+4. **Errors still show:** as a student, try to download a certificate for an unpublished result: the toast must read "Certificate not yet published by Admin" (before, the blob response hid the server message).
+5. **Photo CORS:** the photo is fetched by the browser from `<Worker origin>/uploads/...`. If the ID card on the new stack has no photo but the old one does, check `FRONTEND_URL` on the Worker matches the site origin exactly (CORS), and look for "Could not embed student photo" in the browser console.
+
+Local evidence already gathered (no DB): the browser generator produced byte-identical PDFs to `backend/services/pdfGenerator.js` (creation/modification dates masked) for 12 cases incl. photos, long names and bulk, in UTC, Asia/Kolkata, America/New_York and Pacific/Honolulu.

@@ -1,6 +1,8 @@
 import { MdAdd, MdEdit, MdDelete, MdSave, MdFileDownload, MdAssessment, MdPublish, MdUnpublished } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
+import { generateReportCardFromData } from '../lib/pdf/reportCard';
+import { downloadPdf } from '../lib/pdf/common';
 import Breadcrumb from '../components/Breadcrumb';
 import { useState, useEffect } from 'react';
 
@@ -206,18 +208,12 @@ export default function ReportCards() {
         setLoading(true);
         try {
             const response = await api.get(
-                `/reports/student/${selectedStudent}/exam/${selectedExam}`,
-                { responseType: 'blob' }
+                `/reports/student/${selectedStudent}/exam/${selectedExam}`
             );
 
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
+            const pdfBytes = await generateReportCardFromData(response.data);
             const student = students.find(s => s.id === parseInt(selectedStudent));
-            link.setAttribute('download', `report_card_${student?.full_name}.pdf`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+            downloadPdf(pdfBytes, `report_card_${student?.full_name}.pdf`);
 
             toast.success('Report card generated successfully!');
         } catch (error) {
