@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { MdAdd, MdEdit, MdDelete, MdEmail, MdPerson, MdImage } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
+import { resolveAssetUrl } from '../lib/assetUrl';
 import Breadcrumb from '../components/Breadcrumb';
 
 export default function Teachers() {
@@ -113,7 +114,7 @@ export default function Teachers() {
                             <div className="w-16 h-16 rounded-full bg-gray-100 flex-shrink-0 flex items-center justify-center overflow-hidden border-2 border-primary-200">
                                 {teacher.photo_url ? (
                                     <img
-                                        src={`${teacher.photo_url}`}
+                                        src={resolveAssetUrl(teacher.photo_url)}
                                         // src={`${import.meta.env.VITE_API_URL}${teacher.photo_url}`}
                                         alt={teacher.full_name}
                                         className="w-full h-full object-cover"
@@ -174,7 +175,7 @@ export default function Teachers() {
                                         {photo ? (
                                             <img src={URL.createObjectURL(photo)} alt="Preview" className="w-full h-full object-cover" />
                                         ) : editingTeacher?.photo_url ? (
-                                            <img src={`${editingTeacher.photo_url}`} alt="Preview" className="w-full h-full object-cover" />
+                                            <img src={resolveAssetUrl(editingTeacher.photo_url)} alt="Preview" className="w-full h-full object-cover" />
                                             // <img src={`${import.meta.env.VITE_API_URL}${editingTeacher.photo_url}`} alt="Preview" className="w-full h-full object-cover" />
                                         ) : (
                                             <MdImage size={40} className="text-gray-300" />

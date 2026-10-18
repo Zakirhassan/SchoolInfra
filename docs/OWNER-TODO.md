@@ -64,3 +64,21 @@ Needs the old stack (Express backend + its frontend) and the new stack (Worker +
 5. **Photo CORS:** the photo is fetched by the browser from `<Worker origin>/uploads/...`. If the ID card on the new stack has no photo but the old one does, check `FRONTEND_URL` on the Worker matches the site origin exactly (CORS), and look for "Could not embed student photo" in the browser console.
 
 Local evidence already gathered (no DB): the browser generator produced byte-identical PDFs to `backend/services/pdfGenerator.js` (creation/modification dates masked) for 12 cases incl. photos, long names and bulk, in UTC, Asia/Kolkata, America/New_York and Pacific/Honolulu.
+
+## Task 12: Deploy API + frontend, connect the domain
+
+Code side is done (`frontend/public/_redirects`, `vercel.json` removed, photo/document URLs resolved to the API origin via `frontend/src/lib/assetUrl.ts`). `asdczrm.com` below is a placeholder: confirm availability/the real domain and substitute it everywhere.
+
+1. [ ] **Domain:** buy it (Cloudflare Registrar sells at cost and puts DNS on Cloudflare).
+2. [ ] **Worker secrets + deploy:**
+   ```bash
+   cd api
+   npx wrangler secret put DATABASE_URL     # Neon POOLED string
+   npx wrangler secret put JWT_SECRET       # NEW strong random value; everyone must log in again
+   npx wrangler secret put FRONTEND_URL     # https://app.asdczrm.com
+   npx wrangler deploy
+   ```
+   Dashboard -> Workers -> asdc-api -> Settings -> Domains & Routes -> add custom domain `api.asdczrm.com`.
+3. [ ] **Cloudflare Pages:** Workers & Pages -> Create -> Pages -> connect GitHub `Zakirhassan/SchoolInfra`, root directory `frontend`, build command `npm run build`, output `dist`. Add build variable `VITE_API_URL=https://api.asdczrm.com/api` (`frontend/.env.production` is git-ignored; `frontend/.env.production.example` documents the value). Add custom domain `app.asdczrm.com`.
+4. [ ] **Smoke test:** `curl https://api.asdczrm.com/health` -> `{"status":"OK"...}`; log in at `https://app.asdczrm.com/login` with no CORS error; create a student with a photo (it must show in the list, edit modal and dashboard) and generate their ID card; open a student document in the viewer.
+5. [ ] **Monitoring:** UptimeRobot (free) HTTP checks on `https://api.asdczrm.com/health` and `https://app.asdczrm.com`, email alerts.

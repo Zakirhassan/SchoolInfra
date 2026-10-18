@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MdPerson, MdSchool, MdEventAvailable, MdDescription, MdFileDownload, MdLock } from 'react-icons/md';
 import api from '../api/axios';
+import { resolveAssetUrl } from '../lib/assetUrl';
 import { generateReportCardFromData } from '../lib/pdf/reportCard';
 import { generateIDCard } from '../lib/pdf/idCard';
 import { downloadPdf } from '../lib/pdf/common';
@@ -80,7 +81,7 @@ export default function StudentDashboard() {
                 <div className="w-20 h-20 bg-primary-100 rounded-2xl flex items-center justify-center text-primary-600 overflow-hidden border-2 border-primary-200">
                     {studentData?.photo_url ? (
                         <img
-                            src={`${api.defaults.baseURL.replace('/api', '')}${studentData.photo_url}`}
+                            src={resolveAssetUrl(studentData.photo_url)}
                             alt="Profile"
                             className="w-full h-full object-cover"
                         />
@@ -237,7 +238,7 @@ export default function StudentDashboard() {
                         </div>
                         <div className="h-[calc(90vh-80px)]">
                             <iframe
-                                src={viewDocUrl}
+                                src={resolveAssetUrl(viewDocUrl)}
                                 className="w-full h-full border-0"
                                 title="Document Viewer"
                             />

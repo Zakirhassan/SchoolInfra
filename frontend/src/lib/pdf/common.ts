@@ -3,14 +3,13 @@
 // the browser fills the PDF templates (served from /templates/) with pdf-lib.
 import { PDFDocument, rgb } from 'pdf-lib';
 import type { PDFFont, PDFPage } from 'pdf-lib';
+import { API_ORIGIN, resolveAssetUrl } from '../assetUrl.ts';
 
 export const CERTIFICATE_TEMPLATE = 'CERTIFICATE_TEMPLATE.pdf';
 export const IDCARD_TEMPLATE = 'IDCARD_TEMPLATE.pdf';
 
-// Where photo_url ("/uploads/photos/x.jpg") is served: the Worker origin.
-// VITE_API_URL is e.g. "https://api.example.com/api"; in dev it is unset and
-// "/uploads" goes through the Vite proxy.
-export const API_ORIGIN: string = ((import.meta as any).env?.VITE_API_URL || '/api').replace(/\/api\/?$/, '');
+// Where photo_url ("/uploads/photos/x.jpg") is served: the Worker origin (see ../assetUrl.ts).
+export { API_ORIGIN };
 
 // Byte sources. The browser uses fetch; tests inject a loader that reads from disk.
 export type Bytes = ArrayBuffer | Uint8Array;
@@ -26,9 +25,9 @@ export const browserLoader: Loader = {
         if (!res.ok) throw new Error(`Template not found: /templates/${name}`);
         return res.arrayBuffer();
     },
-    // Edit 2: fs.readFile(absPath) -> fetch(API_ORIGIN + photoUrl). A missing photo
+    // Edit 2: fs.readFile(absPath) -> fetch(resolveAssetUrl(photoUrl)). A missing photo
     // gives bytes that fail to embed, and embedPhoto skips it silently as before.
-    photo: async (photoUrl) => (await fetch(API_ORIGIN + photoUrl)).arrayBuffer(),
+    photo: async (photoUrl) => (await fetch(resolveAssetUrl(photoUrl))).arrayBuffer(),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

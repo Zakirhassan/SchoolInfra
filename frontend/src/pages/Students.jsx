@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { MdAdd, MdFileDownload, MdUpload, MdEdit, MdDelete, MdDescription, MdCloudUpload, MdPerson, MdImage } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
+import { resolveAssetUrl } from '../lib/assetUrl';
 import Breadcrumb from '../components/Breadcrumb';
 import ExcelUpload from '../components/ExcelUpload';
 import { downloadSampleTemplate } from '../lib/excel/parseStudents';
@@ -342,7 +343,7 @@ export default function Students() {
                                             <div className="w-8 h-8 rounded-full bg-gray-100 flex-shrink-0 flex items-center justify-center overflow-hidden border">
                                                 {student.photo_url ? (
                                                     <img
-                                                        src={student.photo_url}
+                                                        src={resolveAssetUrl(student.photo_url)}
                                                         alt=""
                                                         className="w-full h-full object-cover"
                                                     />
@@ -465,7 +466,7 @@ export default function Students() {
                                         {photo ? (
                                             <img src={URL.createObjectURL(photo)} alt="Preview" className="w-full h-full object-cover" />
                                         ) : formData.photoUrl ? (
-                                            <img src={`${api.defaults.baseURL.replace('/api', '')}${formData.photoUrl}`} alt="Preview" className="w-full h-full object-cover" />
+                                            <img src={resolveAssetUrl(formData.photoUrl)} alt="Preview" className="w-full h-full object-cover" />
                                         ) : (
                                             <MdImage size={40} className="text-gray-300" />
                                         )}
@@ -679,7 +680,7 @@ export default function Students() {
                         </div>
                         <div className="h-[calc(90vh-80px)]">
                             <iframe
-                                src={viewDocUrl}
+                                src={resolveAssetUrl(viewDocUrl)}
                                 className="w-full h-full border-0"
                                 title="Document Viewer"
                             />
