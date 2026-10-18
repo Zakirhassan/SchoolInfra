@@ -75,10 +75,59 @@ Code side is done (`frontend/public/_redirects`, `vercel.json` removed, photo/do
    cd api
    npx wrangler secret put DATABASE_URL     # Neon POOLED string
    npx wrangler secret put JWT_SECRET       # NEW strong random value; everyone must log in again
-   npx wrangler secret put FRONTEND_URL     # https://app.asdczrm.com
+   npx wrangler secret put FRONTEND_URL     # https://app.asdczrm.com (exact origin: NO trailing slash or path)
    npx wrangler deploy
    ```
    Dashboard -> Workers -> asdc-api -> Settings -> Domains & Routes -> add custom domain `api.asdczrm.com`.
 3. [ ] **Cloudflare Pages:** Workers & Pages -> Create -> Pages -> connect GitHub `Zakirhassan/SchoolInfra`, root directory `frontend`, build command `npm run build`, output `dist`. Add build variable `VITE_API_URL=https://api.asdczrm.com/api` (`frontend/.env.production` is git-ignored; `frontend/.env.production.example` documents the value). Add custom domain `app.asdczrm.com`.
 4. [ ] **Smoke test:** `curl https://api.asdczrm.com/health` -> `{"status":"OK"...}`; log in at `https://app.asdczrm.com/login` with no CORS error; create a student with a photo (it must show in the list, edit modal and dashboard) and generate their ID card; open a student document in the viewer.
 5. [ ] **Monitoring:** UptimeRobot (free) HTTP checks on `https://api.asdczrm.com/health` and `https://app.asdczrm.com`, email alerts.
+6. [ ] **Gotchas:** `FRONTEND_URL` must have no trailing slash or path (CORS compares it exactly and asset URLs are built from it). `VITE_API_URL` is baked in at build time, so changing it requires a Pages redeploy.
+
+## Task 13: Files backup, hardening, cut-over
+
+The `files-backup` workflow and `docs/RUNBOOK.md` are done. Do steps 1-3 before 4.
+
+1. [ ] **Run `files-backup` once** (Actions -> files-backup -> Run workflow). Expect green and objects under `asdc-backups-b2/files` (see Backups section 3).
+2. [ ] **Security pass:**
+   - Log in as `admin` and change the password from `admin123`.
+   - Rotate the Postgres password that was pasted in chat on 2026-10-18 (Supabase, and Neon if reused); update `DATABASE_URL_DIRECT` (GitHub secret) and `DATABASE_URL` (Worker secret).
+   - Confirm `JWT_SECRET` on the Worker is the new random value.
+   - Confirm `FRONTEND_URL` is exactly `https://app.asdczrm.com`.
+   - Fill in the age key holder/locations in `docs/RUNBOOK.md`.
+3. [ ] **Restore drill (once, before cut-over):** create a NEW Neon branch (not production). Follow "Restore the database" in `docs/RUNBOOK.md` into that branch's direct string. Point `wrangler dev` (or a test Worker) at it, confirm login and Students work, and note how long it took (write the time in the runbook).
+4. [ ] **Cut-over:**
+   1. Complete "Before go-live: still unverified" below (the CPU gate is blocking).
+   2. Announce a short freeze (no data entry).
+   3. Run `db-backup` one last time; confirm green.
+   4. Re-run the Neon import from Supabase (plan Task 4 Steps 3-4) so Neon has the latest data.
+   5. Check `app.asdczrm.com` against Neon, then send users there.
+   6. Keep Render + Supabase UNTOUCHED for 14 days as rollback (RUNBOOK: "Roll back to Render"), then pause/delete them.
+
+## Before go-live: still unverified
+
+Nothing below could be run in the build session (needs your accounts, secrets or live databases).
+
+1. [ ] **BLOCKING - Task 1 CPU spike gate.** Never run. `bcryptjs` likely exceeds the free plan's 10 ms CPU limit per request, which would make login fail in production. Password hashing is isolated in `api/src/lib/password.ts`. Run the spike per the plan; if it fails choose (a) Workers Paid, $5/month (needs your approval; breaks the $0 target), or (b) PBKDF2 plus a forced password reset for all users (needs an extra password-migration task; old bcrypt hashes could not be verified).
+2. [ ] **Parity runs** (old backend vs new Worker, same database). From `api/`, with real ids substituted:
+   ```bash
+   U=admin P=<password> \
+   PATHS='/health,/api/students,/api/students/<id>,/api/students/<id>/documents,/api/teachers,/api/classes,/api/subjects?classId=<classId>,/api/subjects/exams?classId=<classId>,/api/subjects/marks?classId=<classId>&examId=<examId>,/api/audit,/api/attendance/stats/<courseId>' \
+   node scripts/parity.mjs http://localhost:5000 http://localhost:8787
+   ```
+   Paths come from the `api.get` calls in `frontend/src/pages`. Expect `OK` on every line and exit 0. Student-only paths (`/api/attendance/student/<id>`, `/api/idcards/student/<id>`, `/api/reports/student/<id>/exam/<examId>`) need a student login in `U`/`P`. Tasks 5, 6 and 8 each deferred their parity run.
+3. [ ] **UI click-through** on the deployed stack as **admin** (students, teachers, classes, subjects/marks, attendance, fees, audit logs, export), **teacher** and **student** (dashboard, documents, ID card, report card). Look for CORS, 401 or 403 surprises.
+4. [ ] **Excel real-file checks:** Task 9 section above.
+5. [ ] **PDF real-file checks:** Task 10 section above.
+6. [ ] **Uploads:** Task 8 file migration and browser test, above.
+7. [ ] **Deploy smoke test and monitoring:** Task 12 steps 4-5, above.
+8. [ ] **Backups green:** Backups section 3, plus the restore drill (Task 13 step 3).
+
+## Security notes found during port (existing behaviour, not fixed)
+
+These existed in the old Express backend and were ported unchanged so behaviour stays identical. Consider fixing after go-live.
+
+- `GET /api/students` and `GET /api/students/:id` return `password_hash` (the query uses `s.*`); any logged-in user calling them sees the hashes.
+- ID card endpoints (`/api/idcards/...`) have no ownership check: any logged-in user can read any student's card data.
+- `/api/auth/change-password` is unauthenticated (it needs the old password but no token) and has no rate limiting.
+- `/api/auth/login` has no rate limiting, so brute force is possible. A Cloudflare rate-limiting rule would address this.
