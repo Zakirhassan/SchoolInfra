@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import type { AppCtx } from './types';
 import { withDb } from './lib/db';
 import auth from './routes/auth';
+import subjects from './routes/subjects';
 import classes from './routes/classes';
 
 const app = new Hono<AppCtx>();
@@ -17,6 +18,7 @@ app.get('/uploads/*', async (c) => {
 
 app.use('/api/*', withDb);
 app.route('/api/auth', auth);
+app.route('/api/subjects', subjects);
 app.route('/api/classes', classes);
 
 app.notFound((c) => c.json({ error: 'Route not found' }, 404));
