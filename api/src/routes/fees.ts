@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { AppCtx } from '../types';
 import { authenticate } from '../lib/auth';
 import { readBody } from '../lib/body';
+import { withoutPasswordHash } from '../lib/redact';
 
 const r = new Hono<AppCtx>();
 
@@ -72,7 +73,7 @@ r.put('/status/:studentId', authenticate, async (c) => {
       return c.json({ error: 'Student not found' }, 404);
     }
 
-    return c.json(result.rows[0]);
+    return c.json(withoutPasswordHash(result.rows[0]));
   } catch (error) {
     console.error('Update fee status error:', error);
     return c.json({ error: 'Failed to update fee status' }, 500);

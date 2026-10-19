@@ -4,6 +4,7 @@ import { authenticate, logAction } from '../lib/auth';
 import { readBody } from '../lib/body';
 import { hashPassword } from '../lib/password';
 import { putUpload, deleteUpload } from '../lib/uploads';
+import { withoutPasswordHash, rowsWithoutPasswordHash } from '../lib/redact';
 
 const r = new Hono<AppCtx>();
 
@@ -56,7 +57,7 @@ r.get('/', authenticate, async (c) => {
     query += ' ORDER BY s.created_at DESC';
 
     const result = await db.query(query, params);
-    return c.json(result.rows);
+    return c.json(rowsWithoutPasswordHash(result.rows));
   } catch (error) {
     console.error('Get students error:', error);
     return c.json({ error: 'Failed to fetch students' }, 500);
@@ -91,7 +92,7 @@ r.get('/:id', authenticate, async (c) => {
       }
     }
 
-    return c.json(student);
+    return c.json(withoutPasswordHash(student));
   } catch (error) {
     console.error('Get student error:', error);
     return c.json({ error: 'Failed to fetch student' }, 500);
@@ -141,7 +142,7 @@ r.post('/', authenticate, async (c) => {
 
     await logAction(db, user.id, user.role, 'CREATE_STUDENT', { id: result.rows[0].id, name: fullName, status: result.rows[0].enrollment_status });
 
-    return c.json(result.rows[0], 201);
+    return c.json(withoutPasswordHash(result.rows[0]), 201);
   } catch (error: any) {
     if (error.code === '23505') { // Unique violation
       return c.json({ error: 'Student with this admission number or email already exists' }, 409);
@@ -198,7 +199,7 @@ admission_number = $1, roll_number = $2, full_name = $3, father_name = $4,
 
     await logAction(db, user.id, user.role, 'UPDATE_STUDENT', { id, name: fullName });
 
-    return c.json(result.rows[0]);
+    return c.json(withoutPasswordHash(result.rows[0]));
   } catch (error) {
     console.error('Update student error:', error);
     return c.json({ error: 'Failed to update student' }, 500);
@@ -228,7 +229,7 @@ r.patch('/:id/status', authenticate, async (c) => {
 
     await logAction(db, user.id, user.role, 'UPDATE_STUDENT_STATUS', { id, status });
 
-    return c.json(result.rows[0]);
+    return c.json(withoutPasswordHash(result.rows[0]));
   } catch (error) {
     console.error('Update status error:', error);
     return c.json({ error: 'Failed to update status' }, 500);
