@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
+import { generateBulkIDCards as buildBulkIDCards } from '../lib/pdf/idCard';
+import { downloadPdf } from '../lib/pdf/common';
 
 export default function IDCards() {
     const [classes, setClasses] = useState([]);
@@ -28,17 +30,12 @@ export default function IDCards() {
         setLoading(true);
         try {
             const response = await api.post('/idcards/bulk',
-                { classId: selectedClass },
-                { responseType: 'blob' }
+                { classId: selectedClass }
             );
 
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', 'id_cards_bulk.pdf');
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+            const { students, schoolInfo } = response.data;
+            const pdfBytes = await buildBulkIDCards(students, schoolInfo);
+            downloadPdf(pdfBytes, 'id_cards_bulk.pdf');
 
             alert('ID cards generated successfully!');
         } catch (error) {

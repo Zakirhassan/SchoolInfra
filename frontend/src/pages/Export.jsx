@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
+import { downloadStudentsExport } from '../lib/excel/exportStudents';
 
 export default function Export() {
     const [classes, setClasses] = useState([]);
@@ -26,17 +27,9 @@ export default function Export() {
     const handleExport = async () => {
         setLoading(true);
         try {
-            const response = await api.post('/export/students', filters, {
-                responseType: 'blob'
-            });
-
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', 'students_export.xlsx');
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+            // API returns the rows as JSON; the workbook is built in the browser
+            const response = await api.post('/export/students', filters);
+            downloadStudentsExport(response.data);
 
             alert('Data exported successfully!');
         } catch (error) {

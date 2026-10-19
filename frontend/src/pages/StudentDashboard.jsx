@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { MdPerson, MdSchool, MdEventAvailable, MdDescription, MdFileDownload, MdLock } from 'react-icons/md';
 import api from '../api/axios';
+import { resolveAssetUrl } from '../lib/assetUrl';
+import { generateReportCardFromData } from '../lib/pdf/reportCard';
+import { generateIDCard } from '../lib/pdf/idCard';
+import { downloadPdf } from '../lib/pdf/common';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -48,16 +52,9 @@ export default function StudentDashboard() {
 
     const downloadCertificate = async (examId) => {
         try {
-            const response = await api.get(`/reports/student/${user.id}/exam/${examId}`, {
-                responseType: 'blob'
-            });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `Certificate_${examId}.pdf`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+            const response = await api.get(`/reports/student/${user.id}/exam/${examId}`);
+            const pdfBytes = await generateReportCardFromData(response.data);
+            downloadPdf(pdfBytes, `Certificate_${examId}.pdf`);
         } catch (error) {
             toast.error(error.response?.data?.error || 'Certificate not yet published');
         }
@@ -65,16 +62,10 @@ export default function StudentDashboard() {
 
     const downloadIDCard = async () => {
         try {
-            const response = await api.get(`/idcards/student/${user.id}`, {
-                responseType: 'blob'
-            });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `ID_Card_${studentData?.admission_number}.pdf`);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+            const response = await api.get(`/idcards/student/${user.id}`);
+            const { student, schoolInfo } = response.data;
+            const pdfBytes = await generateIDCard(student, schoolInfo);
+            downloadPdf(pdfBytes, `ID_Card_${studentData?.admission_number}.pdf`);
             toast.success('ID Card downloaded successfully!');
         } catch (error) {
             toast.error(error.response?.data?.error || 'Failed to download ID card');
@@ -90,7 +81,7 @@ export default function StudentDashboard() {
                 <div className="w-20 h-20 bg-primary-100 rounded-2xl flex items-center justify-center text-primary-600 overflow-hidden border-2 border-primary-200">
                     {studentData?.photo_url ? (
                         <img
-                            src={`${api.defaults.baseURL.replace('/api', '')}${studentData.photo_url}`}
+                            src={resolveAssetUrl(studentData.photo_url)}
                             alt="Profile"
                             className="w-full h-full object-cover"
                         />
@@ -247,7 +238,7 @@ export default function StudentDashboard() {
                         </div>
                         <div className="h-[calc(90vh-80px)]">
                             <iframe
-                                src={viewDocUrl}
+                                src={resolveAssetUrl(viewDocUrl)}
                                 className="w-full h-full border-0"
                                 title="Document Viewer"
                             />

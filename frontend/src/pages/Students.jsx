@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { MdAdd, MdFileDownload, MdUpload, MdEdit, MdDelete, MdDescription, MdCloudUpload, MdPerson, MdImage } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
+import { resolveAssetUrl } from '../lib/assetUrl';
 import Breadcrumb from '../components/Breadcrumb';
 import ExcelUpload from '../components/ExcelUpload';
+import { downloadSampleTemplate } from '../lib/excel/parseStudents';
 
 export default function Students() {
     const [students, setStudents] = useState([]);
@@ -15,6 +17,7 @@ export default function Students() {
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [showUploadModal, setShowUploadModal] = useState(false);
+    const [uploadMode, setUploadMode] = useState('create'); // was referenced but never declared
     const [showDocsModal, setShowDocsModal] = useState(false);
     const [viewDocUrl, setViewDocUrl] = useState(null);
     const [selectedStudent, setSelectedStudent] = useState(null);
@@ -148,39 +151,12 @@ export default function Students() {
         setPhoto(null);
     };
 
-    const downloadTemplate = async () => {
+    // Simplified: Just one download function for blank template (built in the browser)
+    const downloadBlankTemplate = () => {
         try {
-            const response = await api.get('/students/template/download', {
-                responseType: 'blob'
-            });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', 'student_upload_template.xlsx');
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+            downloadSampleTemplate();
             toast.success('Template downloaded successfully!');
-        } catch (error) {
-            toast.error('Failed to download template');
-        }
-    };
-
-    // Simplified: Just one download function for blank template
-    const downloadBlankTemplate = async () => {
-        try {
-            const response = await api.get('/students/template/download', {
-                responseType: 'blob'
-            });
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', 'student_upload_template.xlsx');
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            toast.success('Template downloaded successfully!');
-        } catch (error) {
+        } catch {
             toast.error('Failed to download template');
         }
     };
@@ -367,7 +343,7 @@ export default function Students() {
                                             <div className="w-8 h-8 rounded-full bg-gray-100 flex-shrink-0 flex items-center justify-center overflow-hidden border">
                                                 {student.photo_url ? (
                                                     <img
-                                                        src={student.photo_url}
+                                                        src={resolveAssetUrl(student.photo_url)}
                                                         alt=""
                                                         className="w-full h-full object-cover"
                                                     />
@@ -490,7 +466,7 @@ export default function Students() {
                                         {photo ? (
                                             <img src={URL.createObjectURL(photo)} alt="Preview" className="w-full h-full object-cover" />
                                         ) : formData.photoUrl ? (
-                                            <img src={`${api.defaults.baseURL.replace('/api', '')}${formData.photoUrl}`} alt="Preview" className="w-full h-full object-cover" />
+                                            <img src={resolveAssetUrl(formData.photoUrl)} alt="Preview" className="w-full h-full object-cover" />
                                         ) : (
                                             <MdImage size={40} className="text-gray-300" />
                                         )}
@@ -704,7 +680,7 @@ export default function Students() {
                         </div>
                         <div className="h-[calc(90vh-80px)]">
                             <iframe
-                                src={viewDocUrl}
+                                src={resolveAssetUrl(viewDocUrl)}
                                 className="w-full h-full border-0"
                                 title="Document Viewer"
                             />

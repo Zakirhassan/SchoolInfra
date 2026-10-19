@@ -31,3 +31,9 @@ backend/uploads/*
 # Database
 *.db
 *.sqlite
+.superpowers/
+
+# Worker (api/)
+api/node_modules/
+api/.wrangler/
+api/.dev.vars

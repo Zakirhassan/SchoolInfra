@@ -1,0 +1,4 @@
+# Copy to .dev.vars (git-ignored) and fill in real values for local `wrangler dev`.
+DATABASE_URL=postgres://USER:PASSWORD@HOST/DBNAME?sslmode=require
+JWT_SECRET=replace-with-same-secret-as-backend-env
+FRONTEND_URL=http://localhost:5173

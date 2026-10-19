@@ -1,0 +1,48 @@
+import { ALLOWED_TYPES } from './lib/uploads';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import type { AppCtx } from './types';
+import { withDb } from './lib/db';
+import auth from './routes/auth';
+import auditLogs from './routes/auditLogs';
+import fees from './routes/fees';
+import subjects from './routes/subjects';
+import classes from './routes/classes';
+import students from './routes/students';
+import teachers from './routes/teachers';
+import exportRoutes from './routes/export';
+import attendance from './routes/attendance';
+import idcards from './routes/idcards';
+import reports from './routes/reports';
+
+const app = new Hono<AppCtx>();
+app.use('*', (c, next) => cors({ origin: c.env.FRONTEND_URL || '*', credentials: true })(c, next));
+app.get('/health', (c) => c.json({ status: 'OK', message: 'School Management System API is running' }));
+
+app.get('/uploads/*', async (c) => {
+  const obj = await c.env.FILES.get(c.req.path.replace(/^\/uploads\//, ''));
+  if (!obj) return c.json({ error: 'Route not found' }, 404);
+  const stored = obj.httpMetadata?.contentType;
+  return new Response(obj.body, { headers: {
+    'content-type': stored && ALLOWED_TYPES.has(stored) ? stored : 'application/octet-stream',
+    'x-content-type-options': 'nosniff',
+    'cache-control': 'public, max-age=86400',
+  } });
+});
+
+app.use('/api/*', withDb);
+app.route('/api/auth', auth);
+app.route('/api/audit', auditLogs);
+app.route('/api/fees', fees);
+app.route('/api/subjects', subjects);
+app.route('/api/classes', classes);
+app.route('/api/students', students);
+app.route('/api/export', exportRoutes);
+app.route('/api/attendance', attendance);
+app.route('/api/teachers', teachers);
+app.route('/api/idcards', idcards);
+app.route('/api/reports', reports);
+
+app.notFound((c) => c.json({ error: 'Route not found' }, 404));
+app.onError((err, c) => { console.error(err); return c.json({ error: 'Something went wrong!' }, 500); });
+export default app;

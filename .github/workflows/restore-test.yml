@@ -1,0 +1,49 @@
+name: restore-test
+on:
+  schedule:
+    - cron: '0 3 1 * *'          # 1st of every month
+  workflow_dispatch:
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    services:
+      pg:
+        image: postgres:17
+        env: { POSTGRES_PASSWORD: test }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      RCLONE_CONFIG_R2_TYPE: s3
+      RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+      RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      PGPASSWORD: test
+    steps:
+      - name: Install tools
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/trusted.gpg.d/pgdg.asc >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17 age rclone
+
+      - name: Fetch + decrypt newest daily backup
+        run: |
+          LATEST=$(rclone lsf R2:asdc-backups/daily/ | sort | tail -1)
+          rclone copyto "R2:asdc-backups/daily/$LATEST" latest.age
+          echo "${{ secrets.AGE_SECRET_KEY }}" > key.txt
+          age -d -i key.txt -o latest.dump latest.age
+
+      - name: Restore into throwaway Postgres
+        run: |
+          createdb -h localhost -U postgres restored
+          pg_restore -h localhost -U postgres -d restored --no-owner latest.dump
+
+      - name: Assert data is really there
+        run: |
+          q() { psql -h localhost -U postgres -d restored -tAc "$1"; }
+          test "$(q 'select count(*) from admins')"  -ge 1
+          test "$(q 'select count(*) from classes')" -ge 1
+          echo "students=$(q 'select count(*) from students') teachers=$(q 'select count(*) from teachers')"
