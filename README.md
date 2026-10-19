@@ -5,7 +5,7 @@ A comprehensive web-based School Management System for administrators to manage 
 ## 🚀 Features
 
 - **Student Management**: Add, edit, delete, and search students
-- **Excel Import/Export**: Bulk upload students via Excel and export filtered data
+- **Excel Export**: Export filtered student data to Excel (students are added one at a time; attendance can be uploaded from an Excel sheet)
 - **ID Card Generation**: Generate professional PDF ID cards (single or bulk)
 - **Report Cards**: Create detailed report cards with marks, grades, and percentages
 - **Fee Tracking**: Monitor and update student fee status
@@ -107,14 +107,6 @@ Then update the INSERT statement in `schema.sql` with the generated hash.
 3. Fill in all required fields
 4. Submit the form
 
-### Bulk Upload via Excel
-
-1. Go to **Students** page
-2. Click **Download Template** to get the Excel template
-3. Fill the template with student data
-4. Upload the completed Excel file
-5. System will validate and import students
-
 ### Generating ID Cards
 
 1. Navigate to **ID Cards** page
@@ -181,8 +173,6 @@ school-management-system/
 - `POST /api/students` - Create student
 - `PUT /api/students/:id` - Update student
 - `DELETE /api/students/:id` - Delete student
-- `POST /api/students/bulk-upload` - Bulk upload via Excel
-- `GET /api/students/template/download` - Download Excel template
 
 ### Classes
 - `GET /api/classes` - Get all classes
@@ -268,11 +258,6 @@ school-management-system/
 ### Port Already in Use
 - Change PORT in backend `.env` file
 - Update proxy in frontend `vite.config.js`
-
-### Excel Upload Fails
-- Check file format (.xlsx or .xls)
-- Verify all required columns are present
-- Check for duplicate admission numbers
 
 ## 📄 License
 

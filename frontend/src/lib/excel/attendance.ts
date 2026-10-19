@@ -1,9 +1,14 @@
 // Attendance Excel: template building (moved from pages/Attendance.jsx) and
 // reading an uploaded sheet into rows for POST /api/attendance/upload.
 import * as XLSX from 'xlsx';
-import { readRows } from './parseStudents.ts';
 
-export { readRows };
+export type Row = Record<string, unknown>;
+
+/** Read the first sheet of an Excel file into rows (sheet_to_json with default options). */
+export async function readRows(file: Blob): Promise<Row[]> {
+  const wb = XLSX.read(await file.arrayBuffer());
+  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+}
 
 export type AttendanceStat = { admission_number: string; full_name: string } & Record<string, unknown>;
 
