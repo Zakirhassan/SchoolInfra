@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test test/excel.test.ts test/pdf.test.ts test/assetUrl.test.ts test/api.test.ts"
+    "test": "node --test test/excel.test.ts test/pdf.test.ts test/assetUrl.test.ts test/api.test.ts test/password.test.ts"
   },
   "dependencies": {
     "axios": "^1.13.2",
