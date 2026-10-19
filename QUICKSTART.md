@@ -101,7 +101,7 @@ npm install
 
 After successful setup:
 1. Change default admin password
-2. Add students manually or via Excel upload
+2. Add students with the Add Student form
 3. Configure school information in backend/.env
 4. Explore all features!
 

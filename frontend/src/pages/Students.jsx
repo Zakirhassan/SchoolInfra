@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
-import { MdAdd, MdFileDownload, MdUpload, MdEdit, MdDelete, MdDescription, MdCloudUpload, MdPerson, MdImage } from 'react-icons/md';
+import { MdAdd, MdEdit, MdDelete, MdDescription, MdCloudUpload, MdPerson, MdImage } from 'react-icons/md';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { resolveAssetUrl } from '../lib/assetUrl';
 import Breadcrumb from '../components/Breadcrumb';
-import ExcelUpload from '../components/ExcelUpload';
-import { downloadSampleTemplate } from '../lib/excel/parseStudents';
 
 export default function Students() {
     const [students, setStudents] = useState([]);
@@ -16,8 +14,6 @@ export default function Students() {
     const [filterStatus, setFilterStatus] = useState('ACTIVE'); // Default to Active
 
     const [showAddModal, setShowAddModal] = useState(false);
-    const [showUploadModal, setShowUploadModal] = useState(false);
-    const [uploadMode, setUploadMode] = useState('create'); // was referenced but never declared
     const [showDocsModal, setShowDocsModal] = useState(false);
     const [viewDocUrl, setViewDocUrl] = useState(null);
     const [selectedStudent, setSelectedStudent] = useState(null);
@@ -151,26 +147,6 @@ export default function Students() {
         setPhoto(null);
     };
 
-    // Simplified: Just one download function for blank template (built in the browser)
-    const downloadBlankTemplate = () => {
-        try {
-            downloadSampleTemplate();
-            toast.success('Template downloaded successfully!');
-        } catch {
-            toast.error('Failed to download template');
-        }
-    };
-
-    const handleUploadSuccess = () => {
-        fetchStudents();
-        setShowUploadModal(false);
-    };
-
-    const openUploadModal = () => {
-        setUploadMode('create');
-        setShowUploadModal(true);
-    };
-
     const handleViewDocs = async (student) => {
         setSelectedStudent(student);
         setShowDocsModal(true);
@@ -256,20 +232,6 @@ export default function Students() {
                     <p className="text-gray-600">Register students, manage credentials, and course enrollments</p>
                 </div>
                 <div className="flex gap-3">
-                    <button
-                        onClick={downloadBlankTemplate}
-                        className="btn btn-primary"
-                    >
-                        <MdFileDownload size={20} />
-                        Download Template
-                    </button>
-                    <button
-                        onClick={openUploadModal}
-                        className="btn btn-success"
-                    >
-                        <MdUpload size={20} />
-                        Upload Template
-                    </button>
                     <button
                         onClick={() => {
                             setEditingId(null);
@@ -421,38 +383,6 @@ export default function Students() {
                     </table>
                 </div>
             </div>
-
-            {/* Upload Modal */}
-            {showUploadModal && (
-                <div className="modal-overlay">
-                    <div className="modal-content max-w-2xl">
-                        <div className="p-6 border-b">
-                            <h2 className="text-2xl font-bold text-gray-800">
-                                {uploadMode === 'create' ? 'Upload New Students' : 'Upload Student Updates'}
-                            </h2>
-                            <p className="text-sm text-gray-600 mt-2">
-                                {uploadMode === 'create'
-                                    ? 'Upload Excel file with new student data'
-                                    : 'Upload Excel file with updated student data'}
-                            </p>
-                        </div>
-
-                        <div className="p-6">
-                            <ExcelUpload
-                                classId={filterClass}
-                                onSuccess={handleUploadSuccess}
-                                mode={uploadMode}
-                            />
-                        </div>
-
-                        <div className="p-6 border-t flex justify-end">
-                            <button onClick={() => setShowUploadModal(false)} className="btn btn-secondary">
-                                Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Add Student Modal */}
             {showAddModal && (

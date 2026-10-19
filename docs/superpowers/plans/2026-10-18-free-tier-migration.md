@@ -2,6 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status (2026-10-19): code done (PR #4 + feat/fresh-start); for the remaining owner steps `docs/OWNER-TODO.md` supersedes this plan.** Changes since the plan was written:
+> - **Fresh start, no data migration.** All existing data is scrap. Task 4 (Supabase -> Neon import, row counts), the cut-over re-import, the parity runs against the old backend and the 14-day Render/Supabase rollback are dropped. The database is created from `api/db/schema.sql` and the first admin from `api/scripts/seed-admin.mjs`. Rollback = previous Pages/Workers deployment + restore the latest backup (`docs/RUNBOOK.md`).
+> - **Task 1 CPU gate resolved: PBKDF2.** A spike measured bcryptjs at ~155 ms CPU on Workers (free plan: 10 ms). `api/src/lib/password.ts` now uses WebCrypto PBKDF2-SHA256, 100000 iterations, stored as `pbkdf2$100000$<b64salt>$<b64hash>`; `bcryptjs` is removed. No forced password reset is needed because there are no existing users. The "existing bcrypt hashes must keep working" constraint below no longer applies.
+> - **Student bulk upload/update removed** (`POST /students/bulk-upload`, `POST /students/bulk-update`, `GET /students/update-template/:classId`, `api/src/lib/studentRows.ts`, the ExcelUpload component), so the bulk CPU checks are gone. Attendance Excel upload stays (it is the only way to record attendance), as does student Excel export.
+> - Owner order: (1) Neon project + schema + seed admin, (2) R2/B2 buckets, age key, GitHub secrets (`DATABASE_URL_DIRECT` = Neon direct from the start), run the 3 workflows, (3) deploy Worker/Pages/domain/monitoring, (4) smoke test + restore drill into a Neon branch.
+
 **Goal:** Run the school system in production for ~$1/month (domain only), always on, with automated, encrypted, restore-tested backups of the database and uploaded files.
 
 **Architecture:** Cloudflare Pages (React frontend) → Cloudflare Workers + Hono (API, ported from Express) → Neon Postgres (data) + Cloudflare R2 (photos/documents). GitHub Actions runs nightly `pg_dump` → `age` encryption → R2 + Backblaze B2 (two providers), plus a monthly automated restore test. PDF and Excel work moves to the browser because the Workers free plan allows 10 ms CPU per request.

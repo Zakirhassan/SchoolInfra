@@ -6,16 +6,20 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:schema": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f db/schema.sql",
+    "seed:admin": "node scripts/seed-admin.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
-    "bcryptjs": "^3.0.3",
     "hono": "^4.13.13"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261018.1",
     "typescript": "^7.0.2",
     "wrangler": "^4.151.1"
+  },
+  "engines": {
+    "node": ">=22.18"
   }
 }

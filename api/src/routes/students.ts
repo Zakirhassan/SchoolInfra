@@ -4,7 +4,7 @@ import { authenticate, logAction } from '../lib/auth';
 import { readBody } from '../lib/body';
 import { hashPassword } from '../lib/password';
 import { putUpload, deleteUpload } from '../lib/uploads';
-import { validateStudentRows, mapUpdateRows, validateBulkUpdate } from '../lib/studentRows';
+import { withoutPasswordHash, rowsWithoutPasswordHash } from '../lib/redact';
 
 const r = new Hono<AppCtx>();
 
@@ -57,7 +57,7 @@ r.get('/', authenticate, async (c) => {
     query += ' ORDER BY s.created_at DESC';
 
     const result = await db.query(query, params);
-    return c.json(result.rows);
+    return c.json(rowsWithoutPasswordHash(result.rows));
   } catch (error) {
     console.error('Get students error:', error);
     return c.json({ error: 'Failed to fetch students' }, 500);
@@ -92,7 +92,7 @@ r.get('/:id', authenticate, async (c) => {
       }
     }
 
-    return c.json(student);
+    return c.json(withoutPasswordHash(student));
   } catch (error) {
     console.error('Get student error:', error);
     return c.json({ error: 'Failed to fetch student' }, 500);
@@ -142,7 +142,7 @@ r.post('/', authenticate, async (c) => {
 
     await logAction(db, user.id, user.role, 'CREATE_STUDENT', { id: result.rows[0].id, name: fullName, status: result.rows[0].enrollment_status });
 
-    return c.json(result.rows[0], 201);
+    return c.json(withoutPasswordHash(result.rows[0]), 201);
   } catch (error: any) {
     if (error.code === '23505') { // Unique violation
       return c.json({ error: 'Student with this admission number or email already exists' }, 409);
@@ -199,7 +199,7 @@ admission_number = $1, roll_number = $2, full_name = $3, father_name = $4,
 
     await logAction(db, user.id, user.role, 'UPDATE_STUDENT', { id, name: fullName });
 
-    return c.json(result.rows[0]);
+    return c.json(withoutPasswordHash(result.rows[0]));
   } catch (error) {
     console.error('Update student error:', error);
     return c.json({ error: 'Failed to update student' }, 500);
@@ -229,7 +229,7 @@ r.patch('/:id/status', authenticate, async (c) => {
 
     await logAction(db, user.id, user.role, 'UPDATE_STUDENT_STATUS', { id, status });
 
-    return c.json(result.rows[0]);
+    return c.json(withoutPasswordHash(result.rows[0]));
   } catch (error) {
     console.error('Update status error:', error);
     return c.json({ error: 'Failed to update status' }, 500);
@@ -259,203 +259,6 @@ r.patch('/bulk-status/course/:classId', authenticate, async (c) => {
   } catch (error) {
     console.error('Bulk status update error:', error);
     return c.json({ error: 'Failed to update course status' }, 500);
-  }
-});
-
-// Bulk-Excel routes. The browser reads the workbook and sends the rows that
-// XLSX.utils.sheet_to_json produced as JSON: { classId, rows }. No files reach the Worker.
-// GET /template/download is gone: the browser builds the sample template itself
-// (frontend/src/lib/excel/parseStudents.ts).
-
-// Bulk upload students from Excel rows
-r.post('/bulk-upload', authenticate, async (c) => {
-  try {
-    const db = c.get('db');
-    const user = c.get('user');
-    const { classId, rows } = await readBody(c);
-
-    if (!classId) {
-      return c.json({ error: 'Class ID is required' }, 400);
-    }
-
-    if (!Array.isArray(rows)) {
-      return c.json({ error: 'Excel file is required' }, 400);
-    }
-
-    // Validate rows
-    const parseResult = validateStudentRows(rows, classId);
-
-    if (!parseResult.success) {
-      return c.json({
-        error: 'Validation failed',
-        details: parseResult.errors
-      }, 400);
-    }
-
-    // Check for duplicate admission numbers in database
-    const admissionNumbers = parseResult.data.map(s => s.admission_number);
-    const duplicateCheck = await db.query(
-      'SELECT admission_number FROM students WHERE admission_number = ANY($1)',
-      [admissionNumbers]
-    );
-
-    if (duplicateCheck.rows.length > 0) {
-      const duplicates = duplicateCheck.rows.map((r: any) => r.admission_number);
-      return c.json({
-        error: 'Duplicate admission numbers found in database',
-        duplicates
-      }, 409);
-    }
-
-    // Insert all students
-    const insertedStudents: any[] = [];
-    for (const student of parseResult.data) {
-      const result = await db.query(
-        `INSERT INTO students(
-        admission_number, roll_number, full_name, father_name, mother_name,
-        date_of_birth, gender, class_id, address, phone_number, fee_status
-    ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING * `,
-        [
-          student.admission_number, student.roll_number, student.full_name,
-          student.father_name, student.mother_name, student.date_of_birth,
-          student.gender, student.class_id, student.address, student.phone_number,
-          student.fee_status
-        ]
-      );
-      insertedStudents.push(result.rows[0]);
-    }
-
-    await logAction(db, user.id, user.role, 'BULK_UPLOAD_STUDENTS', { count: insertedStudents.length, classId });
-
-    return c.json({
-      message: `Successfully uploaded ${insertedStudents.length} students`,
-      count: insertedStudents.length,
-      students: insertedStudents
-    }, 201);
-  } catch (error) {
-    console.error('Bulk upload error:', error);
-    return c.json({ error: 'Failed to upload students' }, 500);
-  }
-});
-
-// Student data for the update template. Returns JSON rows; the browser builds the
-// workbook (frontend/src/lib/excel/bulkUpdate.ts generateUpdateTemplate).
-r.get('/update-template/:classId', authenticate, async (c) => {
-  try {
-    const db = c.get('db');
-    const classId = c.req.param('classId');
-
-    // Fetch all students for the class
-    const result = await db.query(
-      `SELECT * FROM students WHERE class_id = $1 ORDER BY roll_number`,
-      [classId]
-    );
-
-    if (result.rows.length === 0) {
-      return c.json({
-        error: 'No students found for this class',
-        message: 'Please add students to this class first before downloading the update template.'
-      }, 404);
-    }
-
-    return c.json(result.rows);
-  } catch (error) {
-    console.error('Update template download error:', error);
-    return c.json({ error: 'Failed to generate update template' }, 500);
-  }
-});
-
-// Bulk update students from Excel rows
-r.post('/bulk-update', authenticate, async (c) => {
-  try {
-    const db = c.get('db');
-    const { classId, rows } = await readBody(c);
-
-    if (!classId) {
-      return c.json({ error: 'Class ID is required' }, 400);
-    }
-
-    if (!Array.isArray(rows)) {
-      return c.json({ error: 'Excel file is required' }, 400);
-    }
-
-    if (rows.length === 0) {
-      return c.json({ error: 'Excel file is empty' }, 400);
-    }
-
-    // Convert Excel column names to database field names
-    const students = mapUpdateRows(rows);
-
-    // Validate all students
-    const validationResult = await validateBulkUpdate(db, students, classId);
-
-    if (!validationResult.success) {
-      return c.json({
-        error: 'Validation failed',
-        details: validationResult.errors
-      }, 400);
-    }
-
-    // Update all students in a transaction
-    const client = await db.connect();
-    try {
-      await client.query('BEGIN');
-
-      let updatedCount = 0;
-      for (const student of students) {
-        const result = await client.query(
-          `UPDATE students SET
-admission_number = $1,
-    roll_number = $2,
-    full_name = $3,
-    father_name = $4,
-    mother_name = $5,
-    date_of_birth = $6,
-    gender = $7,
-    phone_number = $8,
-    email = $9,
-    address = $10,
-    blood_group = $11,
-    previous_school = $12,
-    admission_date = $13,
-    updated_at = CURRENT_TIMESTAMP
-                    WHERE id = $14`,
-          [
-            student.admission_number,
-            student.roll_number,
-            student.full_name,
-            student.father_name,
-            student.mother_name,
-            student.date_of_birth,
-            student.gender,
-            student.contact_number,
-            student.email,
-            student.address,
-            student.blood_group,
-            student.previous_school,
-            student.admission_date,
-            student.student_id
-          ]
-        );
-        updatedCount += result.rowCount ?? 0;
-      }
-
-      await client.query('COMMIT');
-
-      return c.json({
-        success: true,
-        message: `Successfully updated ${updatedCount} students`,
-        updated: updatedCount
-      });
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error('Bulk update error:', error);
-    return c.json({ error: 'Failed to update students' }, 500);
   }
 });
 

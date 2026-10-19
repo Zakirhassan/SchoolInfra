@@ -2,11 +2,12 @@ import { Hono } from 'hono';
 import type { AppCtx, Env } from '../types';
 import { authenticate } from '../lib/auth';
 import { readBody } from '../lib/body';
+import { withoutPasswordHash } from '../lib/redact';
 
 const r = new Hono<AppCtx>();
 
 // The old route turned s.* into a PDF; as JSON it would also hand out password_hash. The PDF never used it.
-const withoutHash = ({ password_hash, ...s }: any) => s;
+const withoutHash = (s: any) => withoutPasswordHash(s);
 
 // Same defaults as backend/routes/idcards.js (process.env -> Worker vars).
 const schoolInfo = (env: Env) => ({
