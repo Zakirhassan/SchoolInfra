@@ -15,7 +15,8 @@ Never paste passwords, database URLs or the age private key into chat, tickets o
 | Scheduled jobs | GitHub Actions: `db-backup`, `files-backup`, `restore-test` | Secrets listed in `docs/OWNER-TODO.md`. |
 | Backup alarm | healthchecks.io check "asdc-db-backup" | Alerts if no ping within 1 day + 3 h. |
 | Uptime alarm | UptimeRobot on `/health` of the API and on the website | Email alerts. |
-| Rollback (first 14 days only) | Render (old API) + Supabase (old DB) | Left untouched after cut-over, then paused/deleted. |
+| Schema / first admin | `api/db/schema.sql`, `api/scripts/seed-admin.mjs` | Fresh start, no legacy data. See OWNER-TODO step 1. Passwords: PBKDF2-SHA256 `pbkdf2$100000$<salt>$<hash>`. |
+| Rollback | Pages / Workers previous deployment + latest backup | There is no legacy stack (old Render/Supabase held only scrap data). See "Roll back" below. |
 
 ## Backup schedule and retention
 
@@ -77,15 +78,15 @@ The private key (file `asdc-backup.key`, starts `AGE-SECRET-KEY-`) decrypts ever
 - GitHub holds a copy only if the optional `AGE_SECRET_KEY` secret was added (see the trade-off in OWNER-TODO).
 - Never commit it or paste it in chat.
 
-## Roll back to Render (within 14 days of cut-over)
+## Roll back
 
-Render + Supabase still hold the pre-cut-over data, so anything entered on the new system since then will be missing; export or note it first.
+There is no old system to fall back to (Render/Supabase only ever held scrap data). Rolling back means: previous code, plus the latest backup if the data itself is damaged.
 
-The new frontend sends JSON rows (Excel/attendance) and expects JSON PDF data (ID cards/certificates), so pointing `VITE_API_URL` at Render with the new frontend does NOT work. The Worker and the new frontend must be rolled back together.
-
-1. Render dashboard: make sure the old service is running (open its `/health` to wake it).
-2. Redeploy the pre-migration frontend on Cloudflare Pages: either build git commit `ed25c22`, or use Pages "rollback to previous deployment" on a deployment from before the merge. Set `VITE_API_URL=https://<render-service>.onrender.com/api` for that build (baked in at build time). The old backend's `FRONTEND_URL`/CORS must allow `https://app.asdczrm.com`.
-3. Tell users to log in again. To go forward again, redeploy the new frontend with the Worker API URL.
+1. **Bad API deploy:** Cloudflare dashboard -> Workers -> `asdc-api` -> Deployments -> roll back to the last good version (or `npx wrangler rollback` in `api/`, or check out the last good commit and `npx wrangler deploy`).
+2. **Bad website deploy:** Cloudflare Pages -> the project -> Deployments -> last good deployment -> "Rollback to this deployment".
+   If a release changed the API and the website together, roll back both to versions from the same commit.
+3. **Bad or lost data:** stop edits, then "Restore the database" above: restore the latest backup into a NEW Neon branch, verify, and point the Worker's `DATABASE_URL` at it (or restore over production, option (b)). Data entered after that backup is lost; note it first.
+4. If a schema change was involved, `api/db/schema.sql` only creates missing tables/indexes; it never drops or alters existing ones, so re-running it is safe but does not undo anything.
 
 ## Rotate JWT_SECRET
 
