@@ -14,9 +14,6 @@ jobs:
       RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-      RCLONE_CONFIG_B2_TYPE: b2
-      RCLONE_CONFIG_B2_ACCOUNT: ${{ secrets.B2_KEY_ID }}
-      RCLONE_CONFIG_B2_KEY: ${{ secrets.B2_APP_KEY }}
     steps:
       - name: Install tools (pg client 17, age, rclone)
         run: |
@@ -35,11 +32,10 @@ jobs:
       - name: Encrypt
         run: age -r "${{ secrets.AGE_PUBLIC_KEY }}" -o school.dump.age school.dump && rm school.dump
 
-      - name: Upload (R2 + B2)
+      - name: Upload (R2)
         run: |
           STAMP=$(date -u +%Y-%m-%dT%H%MZ)
           rclone copyto school.dump.age "R2:asdc-backups/daily/school-$STAMP.dump.age"
-          rclone copyto school.dump.age "B2:asdc-backups-b2/daily/school-$STAMP.dump.age"
           if [ "$(date -u +%u)" = "7" ]; then
             rclone copyto school.dump.age "R2:asdc-backups/weekly/school-$STAMP.dump.age"
           fi

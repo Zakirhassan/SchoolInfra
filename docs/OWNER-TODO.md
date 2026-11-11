@@ -33,6 +33,8 @@ Do the steps in this order: 1 -> 2 -> 3 -> 4.
 
 ## 2. Backups: buckets, key, GitHub secrets, first runs (~20 min)
 
+> **B2 skipped (owner decision).** Backups go to Cloudflare R2 only: no `B2_KEY_ID`/`B2_APP_KEY` secrets and no Backblaze bucket are needed (ignore those rows and step 3 of 2a). Files are copied nightly from `asdc-files` to `asdc-backups/files/` in the same account, so this protects against accidental deletes but NOT against losing the Cloudflare account. To add a second provider later, re-add the B2 upload to `db-backup.yml` and `files-backup.yml`.
+
 ### 2a. One-time setup
 
 1. Cloudflare -> R2 -> create private buckets `asdc-backups` and `asdc-files`. On `asdc-backups` add lifecycle rules: delete under `daily/` after 30 days; under `weekly/` after 365 days.
