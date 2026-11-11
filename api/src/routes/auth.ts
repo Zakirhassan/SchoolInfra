@@ -42,7 +42,7 @@ r.post('/login', async (c) => {
         user = studentResult.rows[0];
         userRole = 'STUDENT';
         // Block alumni students from logging in
-        if (user.status === 'ALUMNI') {
+        if (user.enrollment_status === 'ALUMNI') {
           return c.json({ error: 'Alumni accounts cannot log in to the student portal. Please contact the administrator.' }, 403);
         }
       }
