@@ -20,8 +20,11 @@ CREATE TABLE IF NOT EXISTS admins (
     username VARCHAR(50) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,      -- pbkdf2$100000$<b64salt>$<b64hash>
     full_name VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    password_changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+-- For databases created before this column existed (idempotent)
+ALTER TABLE admins ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 -- Teachers (login by username or email; routes/teachers.ts, routes/auth.ts)
 CREATE TABLE IF NOT EXISTS teachers (

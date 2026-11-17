@@ -36,7 +36,7 @@ export async function buildAdminSeed(env) {
   const passwordHash = await hashPassword(password);
   const sql = reset
     ? `INSERT INTO admins (username, password_hash, full_name) VALUES ($1, $2, $3)
-       ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash
+       ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash, password_changed_at = NOW()
        RETURNING id, username`
     : `INSERT INTO admins (username, password_hash, full_name) VALUES ($1, $2, $3)
        ON CONFLICT (username) DO NOTHING

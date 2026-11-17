@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import api from '../api/axios';
 
 const AuthContext = createContext(null);
@@ -6,6 +6,7 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [passwordStatus, setPasswordStatus] = useState(null);
 
     useEffect(() => {
         // Check if user is logged in
@@ -17,6 +18,23 @@ export const AuthProvider = ({ children }) => {
         }
         setLoading(false);
     }, []);
+
+    const refreshPasswordStatus = useCallback(async () => {
+        try {
+            const { data } = await api.get('/auth/password-status');
+            setPasswordStatus(data);
+        } catch {
+            setPasswordStatus(null);
+        }
+    }, []);
+
+    // Fetch once per login / app load, admins only
+    const userId = user?.id;
+    const userRole = user?.role;
+    useEffect(() => {
+        if (userRole === 'ADMIN') refreshPasswordStatus();
+        else setPasswordStatus(null);
+    }, [userId, userRole, refreshPasswordStatus]);
 
     const login = async (username, password) => {
         try {
@@ -37,13 +55,15 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
+        try { sessionStorage.removeItem('pwdBannerDismissed'); } catch { /* ignore */ }
+        setPasswordStatus(null);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         setUser(null);
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading }}>
+        <AuthContext.Provider value={{ user, login, logout, loading, passwordStatus, refreshPasswordStatus }}>
             {children}
         </AuthContext.Provider>
     );

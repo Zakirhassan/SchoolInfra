@@ -21,3 +21,6 @@ Run db-backup once and confirm; smoke-test login/student+photo/ID card; attendan
 - Attendance Excel upload does 1-2 queries per row; may exceed the free 10 ms CPU on big files.
 - No Backblaze copy (R2 only).
 - Redeploying the frontend is manual: `VITE_API_URL=... npm run build` in `frontend/`, delete `dist/_redirects`, then `wrangler deploy` with an assets config (`not_found_handling: single-page-application`).
+
+## Admin change-password screen (PR feat/admin-password-screen)
+After merging, the owner (or Claude) must run `ALTER TABLE admins ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;` on Neon BEFORE deploying the new Worker (login-independent, but the new endpoints query that column), then deploy the Worker and the frontend.
