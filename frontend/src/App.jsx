@@ -14,6 +14,8 @@ import Attendance from './pages/Attendance';
 import Export from './pages/Export';
 import Teachers from './pages/Teachers';
 import AuditLogs from './pages/AuditLogs';
+import ChangePassword from './pages/ChangePassword';
+import PasswordBanner from './components/PasswordBanner';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 
@@ -50,6 +52,7 @@ const Layout = ({ children }) => {
         <TopBar setMobileOpen={setMobileOpen} />
 
         <main className="p-4 md:p-6 lg:p-8">
+          <PasswordBanner />
           {children}
         </main>
       </div>
@@ -187,6 +190,17 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <AuditLogs />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/change-password"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <ChangePassword />
                 </Layout>
               </ProtectedRoute>
             }

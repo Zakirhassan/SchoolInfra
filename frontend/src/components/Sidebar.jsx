@@ -14,7 +14,8 @@ import {
     MdChevronLeft,
     MdChevronRight,
     MdHistory,
-    MdSupervisorAccount
+    MdSupervisorAccount,
+    MdLock
 } from 'react-icons/md';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -34,6 +35,7 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
         { path: '/audit-logs', icon: MdHistory, label: 'Audit Logs', roles: ['ADMIN'] },
         { path: '/fees', icon: MdAttachMoney, label: 'Fees', roles: ['ADMIN'] },
         { path: '/export', icon: MdFileDownload, label: 'Export Data', roles: ['ADMIN'] },
+        { path: '/change-password', icon: MdLock, label: 'Change Password', roles: ['ADMIN'] },
     ];
 
     const filteredMenuItems = menuItems.filter(item => !item.roles || item.roles.includes(user?.role));
