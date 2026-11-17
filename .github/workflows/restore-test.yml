@@ -40,6 +40,8 @@ jobs:
       - name: Restore into throwaway Postgres
         run: |
           createdb -h localhost -U postgres restored
+          # the dump contains CREATE SCHEMA public, so start from an empty database
+          psql -h localhost -U postgres -d restored -c 'DROP SCHEMA public CASCADE'
           pg_restore -h localhost -U postgres -d restored --no-owner latest.dump
 
       - name: Assert data is really there
