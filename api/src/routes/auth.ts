@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppCtx } from '../types';
-import { generateToken } from '../lib/auth';
+import { generateToken, authenticate, logAction } from '../lib/auth';
+import { validateNewPassword, passwordStatus } from '../lib/passwordPolicy';
 import { readBody } from '../lib/body';
 import { hashPassword, verifyPassword } from '../lib/password';
 
@@ -79,37 +80,50 @@ r.post('/login', async (c) => {
   }
 });
 
-// Change password
-r.post('/change-password', async (c) => {
+// Change password (authenticated admin; username comes from the token, never the body)
+r.post('/change-password', authenticate, async (c) => {
   try {
     const db = c.get('db');
-    const { username, oldPassword, newPassword } = await readBody(c);
+    const user = c.get('user');
+    if (user.role !== 'ADMIN') return c.json({ error: 'Only administrators can change their password here' }, 403);
 
-    if (!username || !oldPassword || !newPassword) {
-      return c.json({ error: 'All fields are required' }, 400);
+    const { oldPassword, newPassword } = await readBody(c);
+    if (typeof oldPassword !== 'string' || typeof newPassword !== 'string' || !oldPassword || !newPassword) {
+      return c.json({ error: 'Old password and new password are required' }, 400);
     }
+    const problem = validateNewPassword(oldPassword, newPassword);
+    if (problem) return c.json({ error: problem }, 400);
 
-    const result = await db.query('SELECT * FROM admins WHERE username = $1', [username]);
-
-    if (result.rows.length === 0) {
-      return c.json({ error: 'User not found' }, 404);
-    }
-
+    const result = await db.query('SELECT id, password_hash FROM admins WHERE id = $1', [user.id]);
+    if (result.rows.length === 0) return c.json({ error: 'Invalid old password' }, 401);
     const admin = result.rows[0];
 
-    const isValidPassword = await verifyPassword(oldPassword, admin.password_hash);
-    if (!isValidPassword) {
+    if (!(await verifyPassword(oldPassword, admin.password_hash))) {
       return c.json({ error: 'Invalid old password' }, 401);
     }
 
     const newPasswordHash = await hashPassword(newPassword);
-
-    await db.query('UPDATE admins SET password_hash = $1 WHERE id = $2', [newPasswordHash, admin.id]);
+    await db.query('UPDATE admins SET password_hash = $1, password_changed_at = NOW() WHERE id = $2', [newPasswordHash, admin.id]);
+    await logAction(db, admin.id, 'ADMIN', 'CHANGE_PASSWORD', { username: user.username });
 
     return c.json({ message: 'Password changed successfully' });
   } catch (error) {
     console.error('Change password error:', error);
     return c.json({ error: 'Failed to change password' }, 500);
+  }
+});
+
+// Password age, used by the frontend to nag admins monthly
+r.get('/password-status', authenticate, async (c) => {
+  try {
+    const user = c.get('user');
+    if (user.role !== 'ADMIN') return c.json({ error: 'Admins only' }, 403);
+    const result = await c.get('db').query('SELECT password_changed_at FROM admins WHERE id = $1', [user.id]);
+    if (result.rows.length === 0) return c.json({ error: 'Admin not found' }, 404);
+    return c.json(passwordStatus(result.rows[0].password_changed_at));
+  } catch (error) {
+    console.error('Password status error:', error);
+    return c.json({ error: 'Failed to read password status' }, 500);
   }
 });
 
